@@ -1,0 +1,12 @@
+{
+  "lines": [
+    {
+      "slug": "settle-carlisle",
+      "name": "Settle-Carlisle Line",
+      "from": "Settle",
+      "to": "Carlisle",
+      "lengthKm": 113.898,
+      "stations": 10
+    }
+  ]
+}
