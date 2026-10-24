@@ -23,6 +23,7 @@
   #controls .group { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end }
   button { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--dim); padding: 3px 7px; cursor: pointer }
   button.on { border-color: var(--acid); color: var(--acid) }
+  select { font: inherit; color: var(--ink); background: var(--ground); border: 1px solid var(--dim); padding: 3px 6px; max-width: 46vw }
   button:hover { border-color: var(--ink) }
   #strip { left: 12px; right: 12px; bottom: 12px; height: 46px; padding: 0 }
   #strip svg { width: 100%; height: 100% }
@@ -31,6 +32,9 @@
   #photo .cap { margin-top: 5px }
   #photo .credit { color: var(--dim); font-size: 11px; margin-top: 2px; word-break: break-word }
   #photo .credit a { color: var(--dim) }
+  #pad { left: 12px; bottom: 70px; display: flex; gap: 6px; padding: 8px }
+  #pad[hidden] { display: none }
+  #pad button { font-size: 15px; padding: 8px 14px }
   #credits { inset: 50px 12px 70px 12px; overflow: auto; display: none; z-index: 5 }
   #credits a { color: var(--cyan) }
   #credits li { margin-bottom: 4px }
@@ -50,6 +54,7 @@
   <div id="about"></div>
 </div>
 <div id="controls" class="panel" hidden>
+  <div class="group" id="picks" hidden></div>
   <div class="group" id="cams"></div>
   <div class="group" id="rates"></div>
   <div class="group" id="feats" hidden></div>
@@ -58,6 +63,7 @@
 </div>
 <div id="photo" class="panel"><img id="photoImg" alt=""><div class="cap" id="photoCap"></div><div class="credit" id="photoCredit"></div></div>
 <div id="credits" class="panel"></div>
+<div id="pad" class="panel" hidden></div>
 <div id="strip" class="panel" hidden><svg id="stripSvg" preserveAspectRatio="none"></svg></div>
 <div id="pino"><h2>my train simulator: real lines, run from the cafe computer</h2>
 <p>At Lazonby the train burst from a tight tunnel onto a windswept ridge, the climb still gnawing, and the distant Ribblehead arches flickered like a steel horizon, raw and unapologetic. <span class="ride">2026-10-24</span></p>
