@@ -47,6 +47,22 @@
       "to": "Looe",
       "lengthKm": 13.417,
       "stations": 6
+    },
+    {
+      "slug": "st-ives",
+      "name": "St Ives Bay Line",
+      "from": "St Erth",
+      "to": "St Ives",
+      "lengthKm": 6.685,
+      "stations": 4
+    },
+    {
+      "slug": "conwy-valley",
+      "name": "Conwy Valley Line",
+      "from": "Llandudno",
+      "to": "Blaenau Ffestiniog",
+      "lengthKm": 49.387,
+      "stations": 13
     }
   ]
 }
