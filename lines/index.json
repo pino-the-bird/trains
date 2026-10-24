@@ -63,6 +63,14 @@
       "to": "Blaenau Ffestiniog",
       "lengthKm": 49.387,
       "stations": 13
+    },
+    {
+      "slug": "borders",
+      "name": "Borders Railway",
+      "from": "Tweedbank",
+      "to": "Brunstane",
+      "lengthKm": 50.612,
+      "stations": 9
     }
   ]
 }
