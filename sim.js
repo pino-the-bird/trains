@@ -12,6 +12,9 @@
 // (the whole line dark, the stations lit, the train a lamp), and cargo missions (a loco and three wagons, goods to
 // collect at one station and deliver at another, counted).
 //
+// And the ground seen from space (24 Oct, Sam: "texture tiles, think early 2000's flight simulator"): the Sentinel-2
+// cloudless photograph of the land, draped over the hills tile for tile, the contour lines still drawn on it.
+//
 // And the land (24 Oct, Sam: "wide real terrain, a day sky, water, woods, villages and signals"), three more things:
 // the ground for miles either side, fetched as elevation tiles while the page runs and drawn with contour lines; the
 // sky by the clock, a sun that rises and sets and the light with it; and the scenery from the map (a line's
@@ -39,7 +42,7 @@ const pick = index.lines.find((l) => l.slug === params.get('line')) || index.lin
 const line = await fetch(`./lines/${pick.slug}.json`).then((r) => r.json())
 // what he has added to the simulator, as the page beside it says (nothing, until he has)
 const features = await fetch('./features.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
-const HAS = { weather: !!features.weather, night: !!features.night, cargo: !!features.cargo, terrain: !!features.terrain, sky: !!features.sky, scenery: !!features.scenery }
+const HAS = { weather: !!features.weather, night: !!features.night, cargo: !!features.cargo, terrain: !!features.terrain, sky: !!features.sky, scenery: !!features.scenery, satellite: !!features.satellite && !!features.terrain }
 // the land beside this line from the map, if it has been fetched
 const scenery = HAS.scenery ? await fetch(`./lines/${pick.slug}.scenery.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null
 
@@ -180,6 +183,33 @@ function sunStep() {
 }
 
 // the wide ground's colours and its contour lines, used by the near ground too once the tiles are in
+// the photograph of the ground from space (Sentinel-2 cloudless by EOX, 10 m to a pixel, open to any page): the tile
+// with the same address as the ground tile, one level finer for the track's own tiles (its four children, drawn
+// together), draped over the ground; at night it goes dark with everything else
+const SAT = { on: false, url: (z, x, y) => `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/${z}/${y}/${x}.jpg`, live: 0, queue: [], got: 0, of: 0 }
+const imgLoad = (url) => new Promise((resolve, reject) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => resolve(im); im.onerror = () => reject(new Error('no tile')); im.src = url })
+async function satelliteFor(t) {
+  const fine = t.fine, size = fine ? 512 : 256
+  const cv = document.createElement('canvas'); cv.width = cv.height = size
+  const g = cv.getContext('2d')
+  if (fine) {
+    const kids = await Promise.all([[0, 0], [1, 0], [0, 1], [1, 1]].map(([i, j]) => imgLoad(SAT.url(TILES.z + 1, t.x * 2 + i, t.y * 2 + j)).catch(() => null)))
+    kids.forEach((im, k) => { if (im) g.drawImage(im, (k % 2) * 256, Math.floor(k / 2) * 256, 256, 256) })
+    if (!kids.some(Boolean)) throw new Error('no tile')
+  } else g.drawImage(await imgLoad(SAT.url(TILES.z, t.x, t.y)), 0, 0, 256, 256)
+  const tex = new THREE.CanvasTexture(cv)
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter
+  return tex
+}
+function satelliteNext() {
+  while (SAT.live < 4 && SAT.queue.length) {
+    const t = SAT.queue.shift(); SAT.live++
+    satelliteFor(t).then((tex) => { t.photo = contourMat(false); t.photo.map = tex; t.photo.color.setScalar(1.3); t.photo.needsUpdate = true; SAT.got++; if (SAT.on && t.mesh) t.mesh.material = t.photo }, () => { SAT.got++ }).finally(() => { SAT.live--; satelliteNext() })
+  }
+}
+function paintSatellite() {
+  for (const t of TILES.list) if (t.mesh) t.mesh.material = SAT.on && t.photo ? t.photo : t.mesh.userData.plain
+}
 const contourMat = (vertexColors) => {
   const m = new THREE.MeshLambertMaterial({ vertexColors, side: THREE.DoubleSide })
   m.onBeforeCompile = (sh) => {
@@ -298,7 +328,7 @@ if (HAS.terrain) {
     const stride = t.fine ? 2 : 4, N = 256 / stride + 1
     const xs = new Float32Array(N), zs = new Float32Array(N)
     for (let k = 0; k < N; k++) { const px = Math.min(255, k * stride); const [lat, lon] = tileLL(t.x + px / 256, t.y + px / 256, TILES.z); const [xx, zz] = toXZ(lat, lon); xs[k] = xx; zs[k] = zz }
-    const pos = new Float32Array(N * N * 3), col = new Float32Array(N * N * 3)
+    const pos = new Float32Array(N * N * 3), col = new Float32Array(N * N * 3), uv = new Float32Array(N * N * 2)
     const hAt = (i, j) => h[Math.min(255, j * stride) * 256 + Math.min(255, i * stride)]
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
       const x = xs[i], z = zs[j]
@@ -314,6 +344,7 @@ if (HAS.terrain) {
       }
       const k = j * N + i
       pos[k * 3] = x; pos[k * 3 + 1] = g - BASE; pos[k * 3 + 2] = z
+      uv[k * 2] = i / (N - 1); uv[k * 2 + 1] = 1 - j / (N - 1)
       const slope = Math.abs(hAt(Math.min(N - 1, i + 1), j) - hAt(Math.max(0, i - 1), j)) / (2 * stride * 38)
       const c = heightBand(g, slope)
       col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b
@@ -323,12 +354,15 @@ if (HAS.terrain) {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
     geo.setIndex(idx)
     geo.computeVertexNormals()
     const mesh = new THREE.Mesh(geo, contourMat(true))
+    mesh.userData.plain = mesh.material
     scene.add(mesh)
     t.mesh = mesh
     TILES.built++
+    if (HAS.satellite) { if (t.photo) { if (SAT.on) mesh.material = t.photo } else if (!t.queued) { t.queued = true; SAT.queue.push(t); SAT.of++; satelliteNext() } }
   }
   // a few at a time, nearest first; one built a frame so the train keeps moving
   const queue = [...TILES.list], pending = []
@@ -888,6 +922,11 @@ if (HAS.night || HAS.cargo) {
   if (HAS.cargo) { const b = document.createElement('button'); b.textContent = 'cargo'; b.dataset.feat = 'cargo'; b.onclick = () => { cargo.on = !cargo.on; consist(cargo.on); if (cargo.on) newMission(); paintButtons() }; $('feats').append(b) }
   $('feats').hidden = false
 }
+if (HAS.satellite) {
+  SAT.on = params.get('space') !== '0'
+  const b = document.createElement('button'); b.textContent = 'from space'; b.dataset.feat = 'satellite'; b.onclick = () => { SAT.on = !SAT.on; paintSatellite(); paintButtons() }; $('feats').append(b)
+  $('feats').hidden = false
+}
 // the hour, once the sky is his: the clock jumps and the run goes on
 const HOURS = [['dawn', 6.6], ['morning', 9.5], ['noon', 12.5], ['evening', 17.5], ['dusk', 19.2], ['night', 23.3]]
 if (HAS.sky && $('times')) {
@@ -896,7 +935,7 @@ if (HAS.sky && $('times')) {
 }
 function paintButtons() {
   for (const b of $('cams').children) b.classList.toggle('on', b.dataset.cam === cam)
-  for (const b of $('feats').children) b.classList.toggle('on', b.dataset.feat === 'night' ? nightMap : cargo.on)
+  for (const b of $('feats').children) b.classList.toggle('on', b.dataset.feat === 'night' ? nightMap : b.dataset.feat === 'satellite' ? SAT.on : cargo.on)
   for (const b of $('rates').children) b.classList.toggle('on', Number(b.dataset.rate) === run.rate)
   if ($('times')) { const h = (run.clock / 3600) % 24; for (const b of $('times').children) b.classList.toggle('on', Math.abs(Number(b.dataset.hour) - h) < 1.2) }
 }
@@ -906,7 +945,7 @@ $('creditsBtn').onclick = () => { const c = $('credits'); c.style.display = c.st
 {
   const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]))
   const photos = [...line.stations.flatMap((st) => st.photos), ...line.sights]
-  const credits = [...line.credits, ...(HAS.terrain ? [{ what: 'the ground for miles either side', who: 'Mapzen terrarium tiles (SRTM, EU-DEM and others), via AWS Open Data', licence: 'as each source says', url: 'https://github.com/tilezen/joerd/blob/master/docs/attribution.md' }] : []), ...(scenery?.credit ? [scenery.credit] : [])]
+  const credits = [...line.credits, ...(HAS.terrain ? [{ what: 'the ground for miles either side', who: 'Mapzen terrarium tiles (SRTM, EU-DEM and others), via AWS Open Data', licence: 'as each source says', url: 'https://github.com/tilezen/joerd/blob/master/docs/attribution.md' }] : []), ...(HAS.satellite ? [{ what: 'the ground seen from space', who: 'Sentinel-2 cloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2020)', licence: 'CC BY-NC-SA 4.0', url: 'https://s2maps.eu' }] : []), ...(scenery?.credit ? [scenery.credit] : [])]
   $('credits').innerHTML = `<button onclick="this.parentNode.style.display='none'">close</button><h3>Where all of it comes from</h3><ul>${credits.map((c) => `<li>${esc(c.what)}: ${esc(c.who)} (${esc(c.licence)}) <a href="${esc(c.url)}" target="_blank" rel="noopener">source</a></li>`).join('')}</ul><h3>Photographs</h3><ul>${photos.map((p) => `<li>"${esc(p.title)}" by ${esc(p.author)}, ${esc(p.licence)} <a href="${esc(p.page)}" target="_blank" rel="noopener">source</a></li>`).join('')}</ul>`
 }
 // the strip: the whole line, its stations, and where the train is
@@ -933,7 +972,7 @@ function panels() {
   const h = Math.floor(run.clock / 3600) % 24, m = Math.floor(run.clock / 60) % 60
   $('clock').textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
   $('dir').textContent = run.dir > 0 ? `towards ${line.to}` : `towards ${line.from}`
-  const ground = HAS.terrain && TILES.list.length && TILES.built < TILES.list.length ? `the ground coming in, ${TILES.built} of ${TILES.list.length} tiles` : ''
+  const ground = HAS.terrain && TILES.list.length && TILES.built < TILES.list.length ? `the ground coming in, ${TILES.built} of ${TILES.list.length} tiles` : HAS.satellite && SAT.on && SAT.got < SAT.of ? `the photograph coming in, ${SAT.got} of ${SAT.of} tiles` : ''
   $('extra').textContent = [HAS.weather ? WEATHER_WORDS(weather.rain) : '', cargoWords(), ground].filter(Boolean).join(' · ')
   // the photo of wherever it is now, as it comes up
   let best = null, bd = 1600
@@ -985,4 +1024,4 @@ renderer.setAnimationLoop((now) => {
   renderer.render(scene, camera)
 })
 function buildTileSafe(t, h) { try { TILES.buildTile(t, h) } catch (err) { console.warn('tile', t.x, t.y, err.message) } }
-window.__sim = { run, line, stops, camera, scene, boards, groundAt, groundH, at, setCam: (c) => { cam = c; paintButtons() }, HAS, weather, cargo, night: () => nightMap, TILES, scenery, signals, crossings, sunAt }
+window.__sim = { run, line, stops, camera, scene, boards, groundAt, groundH, at, setCam: (c) => { cam = c; paintButtons() }, HAS, weather, cargo, night: () => nightMap, TILES, SAT, scenery, signals, crossings, sunAt }
