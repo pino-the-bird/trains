@@ -15,6 +15,14 @@
 // And the ground seen from space (24 Oct, Sam: "texture tiles, think early 2000's flight simulator"): the Sentinel-2
 // cloudless photograph of the land, draped over the hills tile for tile, the contour lines still drawn on it.
 //
+// And the pickers (24 Oct, Sam: "select different lines and ride different trains from the ui"): every line he has
+// in a list at the top, and four trains to run any of them with: the diesel unit, an express of four, a freight
+// behind a loco, and a steam engine with its tender and three coaches, smoke and all.
+//
+// And its sound (24 Oct): the engine's note and the rail joints under the wheels, made on the spot with Web Audio,
+// a two-tone horn at the crossings and on H, and the announcements in the browser's own voice. And driving it
+// yourself: the throttle and the brake on the keys, the stop at the mark scored, the doors yours to open.
+//
 // And the land (24 Oct, Sam: "wide real terrain, a day sky, water, woods, villages and signals"), three more things:
 // the ground for miles either side, fetched as elevation tiles while the page runs and drawn with contour lines; the
 // sky by the clock, a sun that rises and sets and the light with it; and the scenery from the map (a line's
@@ -23,6 +31,7 @@
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 const INK = 0xf4f2ee, GROUND = 0x0b0b0d, ACID = 0xa7cd07, PINK = 0xe14a89, CYAN = 0x2fd1ff, GOLD = 0xf0c44d
 const R = 6371008.8
@@ -42,7 +51,7 @@ const pick = index.lines.find((l) => l.slug === params.get('line')) || index.lin
 const line = await fetch(`./lines/${pick.slug}.json`).then((r) => r.json())
 // what he has added to the simulator, as the page beside it says (nothing, until he has)
 const features = await fetch('./features.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
-const HAS = { weather: !!features.weather, night: !!features.night, cargo: !!features.cargo, terrain: !!features.terrain, sky: !!features.sky, scenery: !!features.scenery, satellite: !!features.satellite && !!features.terrain }
+const HAS = { weather: !!features.weather, night: !!features.night, cargo: !!features.cargo, terrain: !!features.terrain, sky: !!features.sky, scenery: !!features.scenery, satellite: !!features.satellite && !!features.terrain, sound: !!features.sound, drive: !!features.drive }
 // the land beside this line from the map, if it has been fetched
 const scenery = HAS.scenery ? await fetch(`./lines/${pick.slug}.scenery.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null
 
@@ -476,18 +485,25 @@ for (const st of line.structures) {
       for (let s = a; s <= b; s += 5) { const c = at(s), n = leftOf(heading(s)); pts.push(new THREE.Vector3(c.x + n.x * side, c.y + 1.1, c.z + n.z * side)) }
       scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), inkLine))
     }
+    // (24 Oct: each span a wall of stone with an arch cut through it, the viaduct's own span, down to the ground)
     const span = b - a > 200 ? 13.7 : 18
-    for (let s = a; s <= b + 0.1; s += span) {
-      const c = at(s), gy = profileAt(line.profile.ground, s) - BASE
-      const hgt = c.y - gy + 2
+    for (let s = a; s + span <= b + 0.1; s += span) {
+      const mid = s + span / 2, c = at(mid), gy = Math.min(profileAt(line.profile.ground, s) - BASE, profileAt(line.profile.ground, s + span) - BASE)
+      const hgt = c.y - gy + 1.2
       if (hgt < 3) continue
-      const pier = outlined(new THREE.BoxGeometry(5.6, hgt, 2.2), 0x4a4741)
-      placeAlong(pier, s, 0, -hgt / 2 - 0.4)
-      // the arch to the next pier
-      const pts = []
-      const rise = Math.min(span * 0.45, hgt * 0.4)
-      for (let k = 0; k <= 16; k++) { const u = k / 16, ss = s + u * span, cc = at(ss); pts.push(new THREE.Vector3(cc.x, cc.y - 1.6 - rise + Math.sin(u * Math.PI) * rise, cc.z)) }
-      if (s + span <= b + 0.1) scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), inkLine))
+      const shape = new THREE.Shape()
+      shape.moveTo(-span / 2, 0); shape.lineTo(span / 2, 0); shape.lineTo(span / 2, hgt); shape.lineTo(-span / 2, hgt); shape.lineTo(-span / 2, 0)
+      const r = Math.min(span * 0.4, hgt * 0.45), top = Math.max(0.5, hgt - 1.8 - r)
+      const hole = new THREE.Path()
+      hole.moveTo(-r, 0); hole.lineTo(-r, top); hole.absarc(0, top, r, Math.PI, 0, true); hole.lineTo(r, 0); hole.lineTo(-r, 0)
+      shape.holes.push(hole)
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: 5.4, bevelEnabled: false })
+      geo.translate(0, 0, -2.7)
+      const wall = outlined(geo, 0x4a4741)
+      const t = heading(mid)
+      wall.position.set(c.x, gy - 0.2, c.z)
+      wall.rotation.set(0, Math.atan2(t.x, t.z) + Math.PI / 2, 0)
+      scene.add(wall)
     }
   } else if (st.kind === 'tunnel') {
     const tube = []
@@ -537,6 +553,21 @@ line.stations.forEach((st, k) => {
   const signPost = new THREE.Group(); sign.position.y = 4.4; signPost.add(sign)
   placeAlong(signPost, s + 18, side + Math.sign(side) * 1.8, 0)
   signPost.rotateY(Math.PI / 2)
+  // (24 Oct) an open station: a canopy on posts down the middle of the platform, a shelter, two benches, a fence
+  if (!st.disused) {
+    const canopy = new THREE.Group()
+    const roof = outlined(new THREE.BoxGeometry(4.2, 0.18, 46), 0x2b2a27); roof.position.y = 3.6; canopy.add(roof)
+    const valance = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.42, 46.1), new THREE.MeshBasicMaterial({ color: PINK })); valance.position.y = 3.3; canopy.add(valance)
+    for (let z = -20; z <= 20; z += 8) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.5, 0.2), new THREE.MeshLambertMaterial({ color: 0x55524c })); post.position.set(0, 1.75, z); canopy.add(post) }
+    placeAlong(canopy, s - 8, side + Math.sign(side) * 0.4, 1)
+    const shelter = outlined(new THREE.BoxGeometry(2.4, 2.4, 4.6), 0x3a3833); placeAlong(shelter, s + 30, side + Math.sign(side) * 1.1, 2.2)
+    for (const d of [-36, 36]) { const bench = outlined(new THREE.BoxGeometry(0.5, 0.45, 2.2), 0x6e675c); placeAlong(bench, s + d, side + Math.sign(side) * 1.4, 1.25) }
+    const fence = []
+    const off = side + Math.sign(side) * 2.6
+    for (let z = -55; z <= 55; z += 2.5) { const c = at(s + z), n = leftOf(heading(s + z)); fence.push(new THREE.Vector3(c.x + n.x * off, c.y + 1, c.z + n.z * off), new THREE.Vector3(c.x + n.x * off, c.y + 2.1, c.z + n.z * off)) }
+    for (let z = -55; z < 55; z += 2.5) { const c0 = at(s + z), c1 = at(s + z + 2.5), n0 = leftOf(heading(s + z)), n1 = leftOf(heading(s + z + 2.5)); for (const y of [1.4, 2]) fence.push(new THREE.Vector3(c0.x + n0.x * off, c0.y + y, c0.z + n0.z * off), new THREE.Vector3(c1.x + n1.x * off, c1.y + y, c1.z + n1.z * off)) }
+    scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(fence), new THREE.LineBasicMaterial({ color: 0x8d8a84 })))
+  }
   // platform lamps, lit after dark once the sky is his
   if (HAS.sky && !st.disused) for (const d of [-40, -14, 14, 40]) {
     const lamp = new THREE.Group()
@@ -630,41 +661,59 @@ function buildScenery() {
       scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: 0x1a4a5a, side: THREE.DoubleSide })))
     }
   }
-  // the woods, a tree each
+  // the woods, a tree each: a trunk and a crown of two cones, a conifer dark and a broadleaf lighter and rounder
   {
     const t = scenery.trees || [], n = t.length / 2
     if (n) {
-      const geo = new THREE.ConeGeometry(2.6, 8, 5)
-      geo.translate(0, 4, 0)
-      const trees = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), n)
-      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), c1 = new THREE.Color(0x1c3a1b), c2 = new THREE.Color(0x3d5a22), col = new THREE.Color()
+      const crownGeo = mergeGeometries([new THREE.ConeGeometry(2.6, 6, 6).translate(0, 4.4, 0), new THREE.ConeGeometry(1.9, 4.2, 6).translate(0, 7.2, 0)])
+      const trunkGeo = new THREE.CylinderGeometry(0.22, 0.34, 2.2, 5).translate(0, 1.1, 0)
+      const crowns = new THREE.InstancedMesh(crownGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), n)
+      const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: 0x3b2f24 }), n)
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), c1 = new THREE.Color(0x173418), c2 = new THREE.Color(0x4a6a24), col = new THREE.Color()
       const rng = mulberry(31)
       for (let k = 0; k < n; k++) {
-        const x = t[k * 2], z = t[k * 2 + 1], sc = 0.7 + rng() * 0.8
+        const x = t[k * 2], z = t[k * 2 + 1], sc = 0.7 + rng() * 0.8, broad = rng() < 0.4
         q.setFromAxisAngle(up, rng() * Math.PI * 2)
-        m.compose(new THREE.Vector3(x, groundH(x, z) - 0.2, z), q, new THREE.Vector3(sc, sc * (0.8 + rng() * 0.6), sc))
-        trees.setMatrixAt(k, m)
-        trees.setColorAt(k, col.copy(c1).lerp(c2, rng()))
+        const y = groundH(x, z) - 0.2
+        m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sc * (broad ? 1.5 : 1), sc * (broad ? 0.75 : 0.8 + rng() * 0.6), sc * (broad ? 1.5 : 1)))
+        crowns.setMatrixAt(k, m)
+        m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sc, sc, sc))
+        trunks.setMatrixAt(k, m)
+        crowns.setColorAt(k, col.copy(c1).lerp(c2, broad ? 0.6 + rng() * 0.4 : rng() * 0.45))
       }
-      trees.instanceMatrix.needsUpdate = true
-      scene.add(trees)
+      crowns.instanceMatrix.needsUpdate = true; trunks.instanceMatrix.needsUpdate = true
+      scene.add(crowns, trunks)
     }
   }
-  // the houses, their windows lit after dark
+  // the houses: walls and a pitched roof in one shape, their windows lit after dark; a church gets a tower and a spire
   {
     const b = scenery.buildings || []
     if (b.length) {
-      const geo = new THREE.BoxGeometry(1, 1, 1)
-      geo.translate(0, 0.5, 0)
+      const prof = new THREE.Shape([new THREE.Vector2(-0.5, 0), new THREE.Vector2(0.5, 0), new THREE.Vector2(0.5, 0.72), new THREE.Vector2(0, 1), new THREE.Vector2(-0.5, 0.72)])
+      const geo = new THREE.ExtrudeGeometry(prof, { depth: 1, bevelEnabled: false })
+      geo.translate(0, 0, -0.5)
       const houses = new THREE.InstancedMesh(geo, houseMat, b.length)
+      const churches = b.filter((x) => x[6] === 'church')
+      const spireGeo = mergeGeometries([new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), new THREE.ConeGeometry(0.55, 1.2, 4).translate(0, 1.6, 0)])
+      const spires = churches.length ? new THREE.InstancedMesh(spireGeo, new THREE.MeshLambertMaterial({ color: 0x3f3b36 }), churches.length) : null
       const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0)
+      let ci = 0
       b.forEach(([x, z, w, d, a, h, kind], k) => {
         q.setFromAxisAngle(up, -a)
-        m.compose(new THREE.Vector3(x, groundH(x, z) - 0.5, z), q, new THREE.Vector3(w, (kind === 'church' ? h * 1.6 : h) + 0.5, d))
+        const y = groundH(x, z) - 0.5
+        const hh = (kind === 'church' ? h * 1.5 : h) + 0.5
+        m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(w, hh, d))
         houses.setMatrixAt(k, m)
+        if (kind === 'church' && spires) {
+          // the tower at one end of the nave, a spire on it
+          const tw = Math.min(w, d, 8)
+          m.compose(new THREE.Vector3(x + Math.cos(a) * (w / 2 - tw / 2), y, z + Math.sin(a) * (w / 2 - tw / 2)), q, new THREE.Vector3(tw, hh * 1.5, tw))
+          spires.setMatrixAt(ci++, m)
+        }
       })
       houses.instanceMatrix.needsUpdate = true
       scene.add(houses)
+      if (spires) { spires.instanceMatrix.needsUpdate = true; scene.add(spires) }
     }
   }
   // the names of the places, over them, as on a map
@@ -680,35 +729,77 @@ function buildScenery() {
 }
 
 // ── the train: two cars, its livery from his plates, the key line round it, lamps lit ─────────────────────────────
+// (24 Oct: a diesel unit as they run these lines, the cab ends raked, a curved roof, a strip of windows with their
+// pillars, two doors a side, the destination over each cab, bogies with wheels that turn, the inside lit after dark)
+const wheels = []
+const glassMat = new THREE.MeshLambertMaterial({ color: 0x0b0d12, emissive: new THREE.Color(0xffe6a8), emissiveIntensity: 0 })
+function bogie(z) {
+  const g = new THREE.Group()
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.5, 3), new THREE.MeshLambertMaterial({ color: 0x1b1b1f })); frame.position.y = 0.75; g.add(frame)
+  for (const dz of [-0.95, 0.95]) for (const x of [-0.75, 0.75]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.14, 14), new THREE.MeshLambertMaterial({ color: 0x2a2a2e }))
+    w.rotation.z = Math.PI / 2; w.position.set(x, 0.46, dz); g.add(w); wheels.push(w)
+    const rim = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 14 }, (_, k) => new THREE.Vector3(0, Math.cos((k / 14) * Math.PI * 2) * 0.46, Math.sin((k / 14) * Math.PI * 2) * 0.46))), inkLine)
+    rim.position.set(x + Math.sign(x) * 0.08, 0.46, dz); g.add(rim)
+  }
+  g.position.z = z
+  return g
+}
+function carBody(L, colour, { cabs = true, low = false } = {}) {
+  // the side silhouette, extruded across the width: the floor, the raked ends, the curve of the roof
+  const h = low ? 2.4 : 3.4, rake = cabs ? 1.1 : 0.2
+  const sh = new THREE.Shape()
+  sh.moveTo(-L / 2 + rake, 0.7); sh.lineTo(L / 2 - rake, 0.7); sh.lineTo(L / 2, 1.5); sh.lineTo(L / 2, h - 0.9)
+  sh.quadraticCurveTo(L / 2, h, L / 2 - 0.9, h); sh.lineTo(-L / 2 + 0.9, h); sh.quadraticCurveTo(-L / 2, h, -L / 2, h - 0.9)
+  sh.lineTo(-L / 2, 1.5); sh.lineTo(-L / 2 + rake, 0.7)
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: 2.7, bevelEnabled: false, curveSegments: 6 })
+  geo.translate(0, 0, -1.35)
+  geo.rotateY(Math.PI / 2)
+  return outlined(geo, colour)
+}
 function car(lead) {
   const g = new THREE.Group()
-  const body = outlined(new THREE.BoxGeometry(2.7, 3.1, CAR), CYAN)
-  body.position.y = 2.25
-  g.add(body)
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(2.74, 0.8, CAR - 3), new THREE.MeshBasicMaterial({ color: 0x07070a }))
-  glass.position.y = 2.75
-  g.add(glass)
-  const band = new THREE.Mesh(new THREE.BoxGeometry(2.76, 0.28, CAR - 0.4), new THREE.MeshBasicMaterial({ color: PINK }))
-  band.position.y = 1.55
-  g.add(band)
-  for (const z of [-CAR / 2 + 0.02, CAR / 2 - 0.02]) {
-    const end = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), new THREE.MeshBasicMaterial({ color: GOLD, side: THREE.DoubleSide }))
-    end.position.set(0, 1.6, z + Math.sign(z) * 0.01)
-    g.add(end)
+  g.add(carBody(CAR, CYAN))
+  // the windows: a dark band each side, pillars drawn on it, and the cab's own screen at each end
+  for (const x of [-1.36, 1.36]) {
+    const band = new THREE.Mesh(new THREE.PlaneGeometry(CAR - 4.4, 0.95), glassMat); band.position.set(x, 2.45, 0); band.rotation.y = x > 0 ? Math.PI / 2 : -Math.PI / 2; g.add(band)
+    const pts = []
+    for (let z = -CAR / 2 + 2.2; z <= CAR / 2 - 2.2; z += 2.1) pts.push(new THREE.Vector3(x + Math.sign(x) * 0.005, 1.98, z), new THREE.Vector3(x + Math.sign(x) * 0.005, 2.92, z))
+    g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), inkLine))
+    // two doors a side
+    for (const z of [-CAR / 2 + 3.2, CAR / 2 - 3.2]) { const door = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(1.3, 2.3)), inkLine); door.position.set(x + Math.sign(x) * 0.01, 1.9, z); door.rotation.y = Math.PI / 2; g.add(door) }
   }
-  for (const z of [-CAR / 2 + 4, CAR / 2 - 4]) { const bogie = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.7, 3), new THREE.MeshLambertMaterial({ color: 0x1b1b1f })); bogie.position.set(0, 0.55, z); g.add(bogie) }
+  for (const z of [-CAR / 2, CAR / 2]) {
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 1.0), glassMat); screen.position.set(0, 2.5, z + Math.sign(z) * 0.02); screen.rotation.y = z > 0 ? 0 : Math.PI; g.add(screen)
+    const blind = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.34), new THREE.MeshBasicMaterial({ map: textCanvas([line.to], { w: 512, h: 110, size: 64, box: false, fg: '#f0c44d' }), transparent: true })); blind.position.set(0, 3.1, z + Math.sign(z) * 0.03); blind.rotation.y = z > 0 ? 0 : Math.PI; g.add(blind)
+    const yellow = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.9), new THREE.MeshBasicMaterial({ color: GOLD })); yellow.position.set(0, 1.2, z + Math.sign(z) * 0.02); yellow.rotation.y = z > 0 ? 0 : Math.PI; g.add(yellow)
+    const tail = new THREE.Mesh(new THREE.CircleGeometry(0.12, 10), new THREE.MeshBasicMaterial({ color: 0xff2a2a })); tail.position.set(-0.9, 1.6, z + Math.sign(z) * 0.03); tail.rotation.y = z > 0 ? 0 : Math.PI; g.add(tail)
+  }
+  const band = new THREE.Mesh(new THREE.BoxGeometry(2.76, 0.22, CAR - 2.4), new THREE.MeshBasicMaterial({ color: PINK })); band.position.y = 1.72; g.add(band)
+  for (const z of [-CAR / 2 + 5, 0, CAR / 2 - 5]) { const pod = outlined(new THREE.BoxGeometry(1.4, 0.3, 2.6), 0x1f2a30); pod.position.set(0, 3.5, z); g.add(pod) }
+  for (const z of [-CAR / 2 + 4.2, CAR / 2 - 4.2]) g.add(bogie(z))
   scene.add(g)
   return g
 }
 let cars = [car(), car()]
+// (the kind asked for in the address is made once the trains are known, below)
 // the lamps, lit at whichever end is leading (at the end of the line the train does not turn: the other end leads)
 const lamps = new THREE.Group()
-for (const x of [-0.8, 0.8]) { const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.18, 16), new THREE.MeshBasicMaterial({ color: 0xffffee })); lamp.position.set(x, 1.15, CAR / 2 + 0.03); lamps.add(lamp) }
+for (const x of [-0.8, 0.8]) { const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.16, 16), new THREE.MeshBasicMaterial({ color: 0xffffee })); lamp.position.set(x, 1.6, CAR / 2 + 0.05); lamps.add(lamp) }
+{ const top = new THREE.Mesh(new THREE.CircleGeometry(0.14, 16), new THREE.MeshBasicMaterial({ color: 0xffffee })); top.position.set(0, 3.25, CAR / 2 + 0.05); lamps.add(top) }
 const beam = new THREE.SpotLight(0xfff2cc, 60, 260, 0.38, 0.6, 1.2)
 beam.position.set(0, 1.6, CAR / 2)
 beam.target.position.set(0, 0, CAR / 2 + 60)
 lamps.add(beam, beam.target)
+const smoke = { pts: null, k: 0, loco: null }   // the steam engine's, below
 let TRAIN = 2 * CAR + GAP
+{
+  const n = 160, v = new Float32Array(n * 3).fill(1e9)
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(v, 3))
+  smoke.pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xb9b6ae, size: 1.6, sizeAttenuation: true, transparent: true, opacity: 0.28, depthWrite: false }))
+  smoke.pts.frustumCulled = false; smoke.pts.visible = false
+  scene.add(smoke.pts)
+}
 // on the whole line, where the train is and where the stations are, as marks a fixed size whatever the distance
 const mapMarks = new THREE.Group()
 {
@@ -772,19 +863,95 @@ function paintNight() {
 // cargo missions: a loco and three wagons, goods to collect at one station and deliver at another, counted
 const GOODS = ['limestone', 'timber', 'fertiliser', 'parcels', 'milk', 'coal', 'gypsum', 'cement']
 const cargo = { on: false, from: null, to: null, goods: null, loaded: false, done: 0, rng: mulberry(line.path.length * 11 + 5) }
-function wagon() {
+// a coach: the unit's body without the cabs, in maroon, its windows
+function coach() {
   const g = new THREE.Group()
-  const body = outlined(new THREE.BoxGeometry(2.6, 2.2, CAR - 2), GOLD)
-  body.position.y = 1.9
-  g.add(body)
-  for (const z of [-CAR / 2 + 4, CAR / 2 - 4]) { const bogie = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.7, 3), new THREE.MeshLambertMaterial({ color: 0x1b1b1f })); bogie.position.set(0, 0.45, z); g.add(bogie) }
+  g.add(carBody(CAR, 0x7a2a2a, { cabs: false }))
+  for (const x of [-1.36, 1.36]) {
+    const band = new THREE.Mesh(new THREE.PlaneGeometry(CAR - 3, 0.9), glassMat); band.position.set(x, 2.45, 0); band.rotation.y = x > 0 ? Math.PI / 2 : -Math.PI / 2; g.add(band)
+    const pts = []
+    for (let z = -CAR / 2 + 1.5; z <= CAR / 2 - 1.5; z += 1.9) pts.push(new THREE.Vector3(x + Math.sign(x) * 0.005, 2, z), new THREE.Vector3(x + Math.sign(x) * 0.005, 2.9, z))
+    g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), inkLine))
+  }
+  const band = new THREE.Mesh(new THREE.BoxGeometry(2.76, 0.18, CAR - 1), new THREE.MeshBasicMaterial({ color: GOLD })); band.position.y = 1.7; g.add(band)
+  for (const z of [-CAR / 2 + 4.2, CAR / 2 - 4.2]) g.add(bogie(z))
   scene.add(g)
   return g
 }
-function consist(freight) {
+// a diesel loco for the freight: a long hood, a cab at each end, the pink band
+function loco() {
+  const g = new THREE.Group()
+  g.add(carBody(CAR - 3, 0x2a2a30))
+  const hood = outlined(new THREE.BoxGeometry(2.4, 0.9, CAR - 7), 0x1f1f24); hood.position.y = 3.6; g.add(hood)
+  const band = new THREE.Mesh(new THREE.BoxGeometry(2.76, 0.3, CAR - 5), new THREE.MeshBasicMaterial({ color: PINK })); band.position.y = 1.9; g.add(band)
+  for (const z of [-CAR / 2 + 1.5, CAR / 2 - 1.5]) { const screen = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.8), glassMat); screen.position.set(0, 2.6, z + Math.sign(z) * 0.02); screen.rotation.y = z > 0 ? 0 : Math.PI; g.add(screen); const yellow = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1), new THREE.MeshBasicMaterial({ color: GOLD })); yellow.position.set(0, 1.3, z + Math.sign(z) * 0.02); yellow.rotation.y = z > 0 ? 0 : Math.PI; g.add(yellow) }
+  for (const z of [-CAR / 2 + 4.6, CAR / 2 - 4.6]) g.add(bogie(z))
+  scene.add(g)
+  return g
+}
+// the steam engine: boiler, smokebox and chimney, the cab, three big driving wheels a side with their rods, a
+// tender behind, and smoke when it works
+function steam() {
+  const g = new THREE.Group()
+  const L = 11
+  const frame = outlined(new THREE.BoxGeometry(2.4, 0.5, L), 0x1b1b1f); frame.position.y = 1.2; g.add(frame)
+  const boiler = outlined(new THREE.CylinderGeometry(1.05, 1.05, L - 4, 14).rotateX(Math.PI / 2), 0x1f3b2a); boiler.position.set(0, 2.9, 1.2); g.add(boiler)
+  const smokebox = outlined(new THREE.CylinderGeometry(1.08, 1.08, 1.4, 14).rotateX(Math.PI / 2), 0x151517); smokebox.position.set(0, 2.9, L / 2 - 1.2); g.add(smokebox)
+  const chimney = outlined(new THREE.CylinderGeometry(0.28, 0.36, 1.1, 10), 0x151517); chimney.position.set(0, 4.4, L / 2 - 1.2); g.add(chimney)
+  const dome = outlined(new THREE.SphereGeometry(0.5, 10, 8), 0x1f3b2a); dome.position.set(0, 3.9, 0.5); g.add(dome)
+  const cab = outlined(new THREE.BoxGeometry(2.6, 2.6, 2.6), 0x1f3b2a); cab.position.set(0, 3.0, -L / 2 + 1.6); g.add(cab)
+  const roof = outlined(new THREE.BoxGeometry(2.8, 0.16, 2.8), 0x151517); roof.position.set(0, 4.35, -L / 2 + 1.6); g.add(roof)
+  const band = new THREE.Mesh(new THREE.BoxGeometry(2.62, 0.14, 2.62), new THREE.MeshBasicMaterial({ color: GOLD })); band.position.set(0, 2.2, -L / 2 + 1.6); g.add(band)
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.4, 0.2), new THREE.MeshBasicMaterial({ color: 0xa01010 })); beam.position.set(0, 1.0, L / 2); g.add(beam)
+  for (const x of [-1.25, 1.25]) {
+    for (const z of [-2.6, 0, 2.6]) {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.16, 16), new THREE.MeshLambertMaterial({ color: 0x2a2a2e })); w.rotation.z = Math.PI / 2; w.position.set(x, 0.95, z); g.add(w); wheels.push(w)
+      const spokes = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 16 }, (_, k) => new THREE.Vector3(0, Math.cos((k / 8) * Math.PI) * 0.9, Math.sin((k / 8) * Math.PI) * 0.9))), inkLine); spokes.position.set(x + Math.sign(x) * 0.09, 0.95, z); w.userData.spokes = spokes; g.add(spokes)
+    }
+    const small = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.14, 12), new THREE.MeshLambertMaterial({ color: 0x2a2a2e })); small.rotation.z = Math.PI / 2; small.position.set(x, 0.45, L / 2 - 1.2); g.add(small); wheels.push(small)
+    const rod = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 5.4), new THREE.MeshBasicMaterial({ color: 0xcfcac0 })); rod.position.set(x + Math.sign(x) * 0.18, 0.95, 0); g.add(rod); wheels.push(rod)
+  }
+  smoke.loco = g
+  scene.add(g)
+  return g
+}
+function tender() {
+  const g = new THREE.Group()
+  const body = outlined(new THREE.BoxGeometry(2.6, 2.4, 7), 0x1f3b2a); body.position.y = 2.2; g.add(body)
+  const coal = outlined(new THREE.BoxGeometry(2.2, 0.5, 4), 0x0b0b0d); coal.position.set(0, 3.5, 0.5); g.add(coal)
+  const band = new THREE.Mesh(new THREE.BoxGeometry(2.62, 0.14, 7.02), new THREE.MeshBasicMaterial({ color: GOLD })); band.position.y = 2.2; g.add(band)
+  for (const z of [-2.2, 2.2]) g.add(bogie(z))
+  scene.add(g)
+  return g
+}
+function wagon() {
+  const g = new THREE.Group()
+  g.add(carBody(CAR - 2, GOLD, { cabs: false, low: true }))
+  const load = outlined(new THREE.BoxGeometry(2.2, 0.5, CAR - 6), 0x4a4741); load.position.y = 2.5; g.add(load)
+  for (const z of [-CAR / 2 + 4.2, CAR / 2 - 4.2]) g.add(bogie(z))
+  scene.add(g)
+  return g
+}
+// the trains to pick from, and what each is made of (the length of each vehicle, for where the next one goes)
+const TRAINS = {
+  dmu: { label: 'diesel unit', make: () => [car(), car()], lens: () => [CAR, CAR] },
+  express: { label: 'express', make: () => [car(), coach(), coach(), car()], lens: () => [CAR, CAR, CAR, CAR] },
+  freight: { label: 'freight', make: () => [loco(), wagon(), wagon(), wagon()], lens: () => [CAR - 3, CAR - 2, CAR - 2, CAR - 2] },
+  steam: { label: 'steam', make: () => [steam(), tender(), coach(), coach(), coach()], lens: () => [11, 7, CAR, CAR, CAR] },
+}
+let trainKind = TRAINS[params.get('train')] ? params.get('train') : 'dmu'
+let lens = [CAR, CAR]
+function consist(kind) {
+  if (typeof kind === 'boolean') kind = kind ? 'freight' : trainKind === 'freight' ? 'dmu' : trainKind
+  const t = TRAINS[kind] || TRAINS.dmu
   for (const c of cars) { if (c.children.includes(lamps)) c.remove(lamps); scene.remove(c) }
-  cars = freight ? [car(), wagon(), wagon(), wagon()] : [car(), car()]
-  TRAIN = cars.length * CAR + (cars.length - 1) * GAP
+  wheels.length = 0
+  smoke.loco = null
+  cars = t.make(); lens = t.lens()
+  trainKind = kind
+  TRAIN = lens.reduce((a, b) => a + b, 0) + (cars.length - 1) * GAP
+  if (smoke.pts) smoke.pts.visible = !!smoke.loco
+  paintButtons()
 }
 function newMission() {
   const n = stops.length
@@ -826,20 +993,153 @@ function signalsStep(dt) {
   }
 }
 
+// ── the sound: made here, nothing fetched ─────────────────────────────────────────────────────────────────────────
+// (an engine under the floor: a low saw through a filter whose pitch follows the speed, and a roar of noise with
+// it; the joints in the rail, one every eighteen metres, a tap each; the horn two notes; the voice the browser's)
+const snd = { on: false, ctx: null, eng: null, engGain: null, roar: null, roarGain: null, noise: null, joint: 0, said: null }
+function soundStart() {
+  if (snd.ctx) { snd.ctx.resume(); return }
+  const C = new (window.AudioContext || window.webkitAudioContext)()
+  snd.ctx = C
+  const master = C.createGain(); master.gain.value = 0.6; master.connect(C.destination); snd.master = master
+  const eng = C.createOscillator(); eng.type = 'sawtooth'; eng.frequency.value = 38
+  const lp = C.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 2
+  const eg = C.createGain(); eg.gain.value = 0
+  eng.connect(lp); lp.connect(eg); eg.connect(master); eng.start()
+  snd.eng = eng; snd.engGain = eg; snd.engFilter = lp
+  // noise, once, two seconds of it looped
+  const buf = C.createBuffer(1, C.sampleRate * 2, C.sampleRate), d = buf.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
+  snd.noise = buf
+  const roar = C.createBufferSource(); roar.buffer = buf; roar.loop = true
+  const bp = C.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 180; bp.Q.value = 0.7
+  const rg = C.createGain(); rg.gain.value = 0
+  roar.connect(bp); bp.connect(rg); rg.connect(master); roar.start()
+  snd.roar = roar; snd.roarGain = rg
+}
+function tap(gainTo = 0.5) {
+  const C = snd.ctx; if (!C || !snd.on) return
+  const src = C.createBufferSource(); src.buffer = snd.noise
+  const f = C.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900 + Math.random() * 600; f.Q.value = 1.2
+  const g = C.createGain(); g.gain.setValueAtTime(gainTo, C.currentTime); g.gain.exponentialRampToValueAtTime(0.001, C.currentTime + 0.07)
+  src.connect(f); f.connect(g); g.connect(snd.master); src.start(); src.stop(C.currentTime + 0.08)
+}
+let hornUntil = 0
+function horn(len = 0.9) {
+  const C = snd.ctx; if (!C || !snd.on) return
+  if (C.currentTime < hornUntil) return
+  hornUntil = C.currentTime + len + 0.2
+  for (const [f, v] of [[392, 0.35], [466, 0.3], [784, 0.08]]) {
+    const o = C.createOscillator(); o.type = 'square'; o.frequency.value = f
+    const lp = C.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400
+    const g = C.createGain(); g.gain.setValueAtTime(0.0001, C.currentTime); g.gain.exponentialRampToValueAtTime(v, C.currentTime + 0.05); g.gain.setValueAtTime(v, C.currentTime + len - 0.1); g.gain.exponentialRampToValueAtTime(0.0001, C.currentTime + len)
+    o.connect(lp); lp.connect(g); g.connect(snd.master); o.start(); o.stop(C.currentTime + len + 0.05)
+  }
+}
+function say(text) {
+  if (!snd.on || !('speechSynthesis' in window) || snd.said === text) return
+  snd.said = text
+  const u = new SpeechSynthesisUtterance(text)
+  const voices = speechSynthesis.getVoices(), v = voices.find((x) => /en-GB/i.test(x.lang) && /female|Kate|Serena|Stephanie|Martha/i.test(x.name)) || voices.find((x) => /en-GB/i.test(x.lang)) || voices.find((x) => /^en/i.test(x.lang))
+  if (v) u.voice = v
+  u.rate = 0.95; u.pitch = 1; u.volume = 0.9
+  speechSynthesis.cancel(); speechSynthesis.speak(u)
+}
+function soundStep(dt) {
+  if (!HAS.sound || !snd.on || !snd.ctx) return
+  const v = run.v, C = snd.ctx, t = C.currentTime
+  const pull = drive.on ? Math.max(0, drive.notch) : run.v < run.want - 0.3 ? 1 : 0.25
+  snd.eng.frequency.setTargetAtTime(38 + v * 1.6 + pull * 22, t, 0.3)
+  snd.engFilter.frequency.setTargetAtTime(380 + pull * 500 + v * 6, t, 0.3)
+  snd.engGain.gain.setTargetAtTime(0.05 + pull * 0.12, t, 0.4)
+  snd.roarGain.gain.setTargetAtTime(Math.min(0.35, v / 90), t, 0.5)
+  // a tap at every joint, both bogies of the first car heard
+  snd.joint += v * dt
+  if (snd.joint > 18) { snd.joint -= 18; tap(Math.min(0.6, 0.15 + v / 50)); setTimeout(() => tap(Math.min(0.5, 0.12 + v / 60)), 90) }
+  // the horn before a crossing
+  for (const cr of crossings) { const ahead = (cr.s - run.s) * run.dir; if (ahead > 380 && ahead < 420 && v > 2) horn() }
+}
+
+// ── driving it yourself ───────────────────────────────────────────────────────────────────────────────────────────
+// (the throttle a notch at a time, the brake the same, the speed the line's; each stop scored by how far from the
+// mark the doors line up, and the doors are yours; at the end of the line the other cab leads)
+const drive = { on: false, notch: 0, stops: 0, score: 0, last: null, doors: false, overspeed: 0 }
+const MARK = 0, LIMIT = LINE_SPEED * 1.15
+function driveWords() {
+  if (!drive.on) return ''
+  const nx = stops[run.next]
+  const ahead = nx ? Math.abs(nx.s - run.s) : 0
+  const bits = [`driving: ${drive.notch > 0 ? `power ${Math.round(drive.notch * 100)}%` : drive.notch < 0 ? `brake ${Math.round(-drive.notch * 100)}%` : 'coasting'}`]
+  if (drive.last) bits.push(drive.last)
+  if (nx && ahead < 600 && run.v > 0.1) bits.push(`${nx.name} in ${Math.round(ahead)} m`)
+  if (drive.doors) bits.push('doors open, space to close and go')
+  if (run.v > LINE_SPEED + 0.5) bits.push('over the line speed')
+  if (drive.stops) bits.push(`${drive.stops} stops, ${drive.score} points`)
+  return bits.join(' · ')
+}
+function driveStep(dt) {
+  if (!drive.on) return
+  run.clock += dt
+  if (drive.doors) { run.v = 0; return }
+  const a = drive.notch > 0 ? ACCEL * drive.notch : drive.notch < 0 ? -BRAKE * 1.8 * -drive.notch : -0.02
+  run.v = clamp(run.v + a * dt, 0, LIMIT)
+  run.s = clamp(run.s + run.dir * run.v * dt, TRAIN + 2, LENGTH - 2)
+  if ((run.dir > 0 && run.s >= LENGTH - 2) || (run.dir < 0 && run.s <= TRAIN + 2)) run.v = 0
+  // the next stop is whichever is ahead now
+  let i = run.next
+  while (stops[i] && (stops[i].s - run.s) * run.dir < -60) i += run.dir
+  if (i >= 0 && i < stops.length) run.next = i
+}
+function driveDoors() {
+  if (!drive.on) return
+  if (drive.doors) { drive.doors = false; drive.last = null; return }
+  if (run.v > 0.3) { drive.last = 'stop first'; return }
+  // where the doors are against the mark: the nearest stop
+  let best = null, bd = Infinity
+  for (const st of stops) { const d = Math.abs(st.s - run.s); if (d < bd) { bd = d; best = st } }
+  if (!best || bd > 60) { drive.last = 'no platform here'; return }
+  const off = Math.round((run.s - best.s) * run.dir)
+  const pts = bd < 2 ? 10 : bd < 5 ? 7 : bd < 12 ? 4 : 1
+  drive.stops++; drive.score += pts
+  drive.last = `${best.name}: ${off === 0 ? 'on the mark' : `${Math.abs(off)} m ${off > 0 ? 'past' : 'short of'} the mark`}, ${pts} points`
+  drive.doors = true
+  say(`This is ${best.name}.`)
+  onArrive(stops.indexOf(best))
+  // the end of the line: the other end leads once the doors close
+  const end = best === stops[0] || best === stops[stops.length - 1]
+  if (end && ((best === stops[stops.length - 1] && run.dir > 0) || (best === stops[0] && run.dir < 0))) { run.s -= run.dir * TRAIN; run.dir *= -1; cars.reverse(); run.next = stops.indexOf(best) + run.dir }
+}
+addEventListener('keydown', (e) => {
+  if (e.repeat) return
+  if (HAS.sound && (e.key === 'h' || e.key === 'H')) horn(1.2)
+  if (!drive.on) return
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { drive.notch = clamp(Math.round(drive.notch * 4 + 1) / 4, -1, 1); e.preventDefault() }
+  if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { drive.notch = clamp(Math.round(drive.notch * 4 - 1) / 4, -1, 1); e.preventDefault() }
+  if (e.key === ' ') { driveDoors(); e.preventDefault() }
+})
+
 // ── running it ────────────────────────────────────────────────────────────────────────────────────────────────────
-const run = { s: stops[0].s + TRAIN, v: 0, dir: 1, next: 1, wait: DWELL, rate: Number(params.get('rate')) || 4, clock: 6 * 3600 + 40 * 60 }
+const run = { s: stops[0].s + TRAIN, v: 0, dir: 1, next: 1, wait: DWELL, rate: Number(params.get('rate')) || 4, clock: 6 * 3600 + 40 * 60, want: 0 }
 if (params.get('hour')) run.clock = Number(params.get('hour')) * 3600
 function stepTrain(dt) {
+  if (drive.on) { driveStep(dt); return }
   run.clock += dt
-  if (run.wait > 0) { run.wait -= dt; run.v = 0; return }
+  if (run.wait > 0) {
+    run.wait -= dt; run.v = 0
+    if (run.wait <= 0 && HAS.sound) { const nx = stops[run.next]; if (nx) say(`This train is for ${run.dir > 0 ? line.to : line.from}. The next station is ${nx.name}.`) }
+    return
+  }
   const target = stops[run.next]
   const left = (target.s - run.s) * run.dir
   const want = Math.min(LINE_SPEED, Math.sqrt(Math.max(0, 2 * BRAKE * (left - 1))))
+  run.want = want
   run.v = want > run.v ? Math.min(want, run.v + ACCEL * dt) : Math.max(want, run.v - BRAKE * 1.6 * dt)
   run.s += run.dir * run.v * dt
+  if (left > 380 && left < 400 && HAS.sound) say(`We are now approaching ${target.name}.`)
   if (left <= 1.2 || (run.v < 0.05 && left < 6)) {
     run.s = target.s; run.v = 0
     onArrive(run.next)
+    if (HAS.sound) say(`This is ${target.name}.`)
     const end = run.next === stops.length - 1 || run.next === 0
     // the driver walks to the other end: the train stays where it is and its other end leads
     if (end) { run.s -= run.dir * TRAIN; run.dir *= -1; run.wait = TURN; cars.reverse() }
@@ -850,12 +1150,26 @@ function stepTrain(dt) {
 function placeTrain() {
   // the lead car is the end facing the way it is going, and carries the lamps
   if (lamps.parent !== cars[0]) cars[0].add(lamps)
+  let back = 0
   cars.forEach((c, k) => {
-    const mid = run.s - run.dir * (CAR / 2 + k * (CAR + GAP))
-    const front = at(mid + run.dir * 8), back = at(mid - run.dir * 8)
-    c.position.copy(front).add(back).multiplyScalar(0.5)
-    c.lookAt(front)
+    const L = lens[k] ?? CAR
+    const mid = run.s - run.dir * (back + L / 2)
+    back += L + GAP
+    const f = at(mid + run.dir * Math.min(8, L / 2 - 0.5)), b = at(mid - run.dir * Math.min(8, L / 2 - 0.5))
+    c.position.copy(f).add(b).multiplyScalar(0.5)
+    c.lookAt(f)
   })
+  // the smoke, from the chimney, drifting back and up while it works
+  if (smoke.pts && smoke.loco) {
+    const a = smoke.pts.geometry.attributes.position.array, head = smoke.loco
+    const chimney = new THREE.Vector3(0, 4.9, 4.3).applyMatrix4(head.matrixWorld)
+    smoke.k = (smoke.k + 1) % (a.length / 3)
+    const puff = run.v > 0.2 || drive.notch > 0
+    a[smoke.k * 3] = puff ? chimney.x : 1e9; a[smoke.k * 3 + 1] = chimney.y; a[smoke.k * 3 + 2] = chimney.z
+    const t = heading(run.s).multiplyScalar(-run.dir)
+    for (let i = 0; i < a.length; i += 3) { if (a[i] > 1e8) continue; a[i] += t.x * 0.5 + (Math.random() - 0.5) * 0.7; a[i + 1] += 0.1 + Math.random() * 0.08; a[i + 2] += t.z * 0.5 + (Math.random() - 0.5) * 0.7; if (a[i + 1] > chimney.y + 14) a[i] = 1e9 }
+    smoke.pts.geometry.attributes.position.needsUpdate = true
+  }
 }
 
 // ── looking at it ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -914,13 +1228,42 @@ function aim(dt) {
 
 // ── the panels ────────────────────────────────────────────────────────────────────────────────────────────────────
 $('name').textContent = `${line.from} to ${line.to}`
+// the pickers: every line he has, and the trains
+{
+  const ls = document.createElement('select')
+  for (const l of index.lines) { const o = document.createElement('option'); o.value = l.slug; o.textContent = `${l.name}, ${l.from} to ${l.to}`; if (l.slug === pick.slug) o.selected = true; ls.append(o) }
+  ls.onchange = () => { const u = new URL(location.href); u.searchParams.set('line', ls.value); location.href = u.toString() }
+  const ts = document.createElement('select')
+  for (const [k, t] of Object.entries(TRAINS)) { const o = document.createElement('option'); o.value = k; o.textContent = t.label; ts.append(o) }
+  ts.value = trainKind
+  ts.onchange = () => { consist(ts.value); if (ts.value !== 'freight' && cargo.on) { cargo.on = false } const u = new URL(location.href); u.searchParams.set('train', ts.value); history.replaceState(null, '', u.toString()); paintButtons() }
+  $('picks').append(ls, ts)
+  $('picks').hidden = false
+  window.__sim_pickers = { ls, ts }
+}
+if (trainKind !== 'dmu') consist(trainKind)
 $('about').textContent = line.summary?.text ? line.summary.text.split('. ').slice(0, 2).join('. ').replace(/\.?$/, '.') : ''
 for (const [k, label] of CAMS) { const b = document.createElement('button'); b.textContent = label; b.dataset.cam = k; b.onclick = () => { cam = k; sideAt = null; paintButtons() }; $('cams').append(b) }
 for (const r of [1, 4, 16, 64]) { const b = document.createElement('button'); b.textContent = `${r}x`; b.dataset.rate = r; b.onclick = () => { run.rate = r; paintButtons() }; $('rates').append(b) }
 if (HAS.night || HAS.cargo) {
   if (HAS.night) { const b = document.createElement('button'); b.textContent = 'night map'; b.dataset.feat = 'night'; b.onclick = () => { nightMap = !nightMap; paintNight(); if (nightMap) { cam = 'map'; sideAt = null } paintButtons() }; $('feats').append(b) }
-  if (HAS.cargo) { const b = document.createElement('button'); b.textContent = 'cargo'; b.dataset.feat = 'cargo'; b.onclick = () => { cargo.on = !cargo.on; consist(cargo.on); if (cargo.on) newMission(); paintButtons() }; $('feats').append(b) }
+  if (HAS.cargo) { const b = document.createElement('button'); b.textContent = 'cargo'; b.dataset.feat = 'cargo'; b.onclick = () => { cargo.on = !cargo.on; if (cargo.on) { consist('freight'); newMission() } else if (trainKind === 'freight') consist('dmu'); paintButtons() }; $('feats').append(b) }
   $('feats').hidden = false
+}
+if (HAS.sound) {
+  const b = document.createElement('button'); b.textContent = 'sound'; b.dataset.feat = 'sound'
+  b.onclick = () => { snd.on = !snd.on; if (snd.on) soundStart(); else { snd.ctx?.suspend(); speechSynthesis?.cancel() } paintButtons() }
+  $('feats').append(b); $('feats').hidden = false
+}
+if (HAS.drive) {
+  const b = document.createElement('button'); b.textContent = 'drive it'; b.dataset.feat = 'drive'
+  b.onclick = () => { drive.on = !drive.on; drive.notch = 0; drive.doors = false; drive.last = drive.on ? 'arrows or W and S for power and brake, space for the doors' : null; if (drive.on) { run.wait = 0; run.rate = 1; cam = 'cab'; sideAt = null } paintButtons() }
+  $('feats').append(b); $('feats').hidden = false
+  // and on a phone, the same three on the screen
+  const pad = $('pad')
+  if (pad) {
+    for (const [label, fn] of [['power', () => { drive.notch = clamp(Math.round(drive.notch * 4 + 1) / 4, -1, 1) }], ['brake', () => { drive.notch = clamp(Math.round(drive.notch * 4 - 1) / 4, -1, 1) }], ['doors', driveDoors]]) { const k = document.createElement('button'); k.textContent = label; k.onclick = fn; pad.append(k) }
+  }
 }
 if (HAS.satellite) {
   SAT.on = params.get('space') !== '0'
@@ -935,7 +1278,9 @@ if (HAS.sky && $('times')) {
 }
 function paintButtons() {
   for (const b of $('cams').children) b.classList.toggle('on', b.dataset.cam === cam)
-  for (const b of $('feats').children) b.classList.toggle('on', b.dataset.feat === 'night' ? nightMap : b.dataset.feat === 'satellite' ? SAT.on : cargo.on)
+  if (window.__sim_pickers) window.__sim_pickers.ts.value = trainKind
+  for (const b of $('feats').children) b.classList.toggle('on', b.dataset.feat === 'night' ? nightMap : b.dataset.feat === 'satellite' ? SAT.on : b.dataset.feat === 'sound' ? snd.on : b.dataset.feat === 'drive' ? drive.on : cargo.on)
+  if ($('pad')) $('pad').hidden = !drive.on
   for (const b of $('rates').children) b.classList.toggle('on', Number(b.dataset.rate) === run.rate)
   if ($('times')) { const h = (run.clock / 3600) % 24; for (const b of $('times').children) b.classList.toggle('on', Math.abs(Number(b.dataset.hour) - h) < 1.2) }
 }
@@ -973,7 +1318,7 @@ function panels() {
   $('clock').textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
   $('dir').textContent = run.dir > 0 ? `towards ${line.to}` : `towards ${line.from}`
   const ground = HAS.terrain && TILES.list.length && TILES.built < TILES.list.length ? `the ground coming in, ${TILES.built} of ${TILES.list.length} tiles` : HAS.satellite && SAT.on && SAT.got < SAT.of ? `the photograph coming in, ${SAT.got} of ${SAT.of} tiles` : ''
-  $('extra').textContent = [HAS.weather ? WEATHER_WORDS(weather.rain) : '', cargoWords(), ground].filter(Boolean).join(' · ')
+  $('extra').textContent = [HAS.weather ? WEATHER_WORDS(weather.rain) : '', cargoWords(), driveWords(), ground].filter(Boolean).join(' · ')
   // the photo of wherever it is now, as it comes up
   let best = null, bd = 1600
   for (const b of boards) { const d = Math.abs(b.s - run.s); if (d < bd && !b.failed) { bd = d; best = b } }
@@ -1005,14 +1350,17 @@ renderer.setAnimationLoop((now) => {
   for (let k = 0; k < n; k++) stepTrain((dt * run.rate) / n)
   placeTrain()
   weatherStep(dt * Math.min(run.rate, 4))
+  soundStep(dt * run.rate)
   sunStep()
   signalsStep(dt * Math.min(run.rate, 4))
   // a tile a frame, as they come in
   if (TILES.pending?.length) { const [t, h] = TILES.pending.shift(); buildTileSafe(t, h) }
+  for (const w of wheels) { const r = w.geometry.parameters?.radiusTop || 0.46; if (w.geometry.type === 'BoxGeometry') w.position.y = 0.95 + Math.sin((run.s / 0.95) * run.dir) * 0.3; else { w.rotation.x += (run.v * dt * run.rate) / r; if (w.userData.spokes) w.userData.spokes.rotation.x = w.rotation.x } }
   // the lamps and the windows, by the light
   if (HAS.sky) {
     const dark = 1 - daylight
     houseMat.emissiveIntensity = 0.16 * dark
+    glassMat.emissiveIntensity = 0.5 * dark
     for (const l of platformLamps) l.material.color.set(GOLD).multiplyScalar(0.35 + 0.65 * dark)
   }
   laySleepers(run.s)
@@ -1024,4 +1372,4 @@ renderer.setAnimationLoop((now) => {
   renderer.render(scene, camera)
 })
 function buildTileSafe(t, h) { try { TILES.buildTile(t, h) } catch (err) { console.warn('tile', t.x, t.y, err.message) } }
-window.__sim = { run, line, stops, camera, scene, boards, groundAt, groundH, at, setCam: (c) => { cam = c; paintButtons() }, HAS, weather, cargo, night: () => nightMap, TILES, SAT, scenery, signals, crossings, sunAt }
+window.__sim = { run, line, stops, camera, scene, boards, groundAt, groundH, at, setCam: (c) => { cam = c; paintButtons() }, HAS, weather, cargo, night: () => nightMap, TILES, SAT, scenery, signals, crossings, sunAt, snd, drive, driveDoors, consist, TRAINS, kind: () => trainKind }
