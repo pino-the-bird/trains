@@ -7,6 +7,22 @@
       "to": "Carlisle",
       "lengthKm": 113.898,
       "stations": 10
+    },
+    {
+      "slug": "leeds-morecambe",
+      "name": "Leeds to Morecambe Line",
+      "from": "Shipley",
+      "to": "Bare Lane",
+      "lengthKm": 92.678,
+      "stations": 16
+    },
+    {
+      "slug": "tarka",
+      "name": "Tarka Line",
+      "from": "Exeter St Davids",
+      "to": "Barnstaple",
+      "lengthKm": 62.86,
+      "stations": 13
     }
   ]
 }
