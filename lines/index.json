@@ -39,6 +39,14 @@
       "to": "Whitby",
       "lengthKm": 55.931,
       "stations": 18
+    },
+    {
+      "slug": "looe",
+      "name": "Looe Valley Line",
+      "from": "Liskeard",
+      "to": "Looe",
+      "lengthKm": 13.417,
+      "stations": 6
     }
   ]
 }
