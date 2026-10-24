@@ -23,6 +23,22 @@
       "to": "Barnstaple",
       "lengthKm": 62.86,
       "stations": 13
+    },
+    {
+      "slug": "hope-valley",
+      "name": "Hope Valley Line",
+      "from": "Sheffield",
+      "to": "Manchester Piccadilly",
+      "lengthKm": 67.393,
+      "stations": 20
+    },
+    {
+      "slug": "esk-valley",
+      "name": "Esk Valley Line",
+      "from": "Middlesbrough",
+      "to": "Whitby",
+      "lengthKm": 55.931,
+      "stations": 18
     }
   ]
 }
