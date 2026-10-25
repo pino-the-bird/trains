@@ -79,6 +79,14 @@
       "to": "Newcastle",
       "lengthKm": 98.96,
       "stations": 16
+    },
+    {
+      "slug": "cumbrian-coast",
+      "name": "Cumbrian Coast Line",
+      "from": "Carlisle",
+      "to": "Barrow-in-Furness",
+      "lengthKm": 137.73,
+      "stations": 26
     }
   ]
 }
