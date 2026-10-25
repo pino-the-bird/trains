@@ -95,6 +95,14 @@
       "to": "Kyle of Lochalsh",
       "lengthKm": 132.196,
       "stations": 17
+    },
+    {
+      "slug": "cambrian",
+      "name": "Cambrian Line",
+      "from": "Shrewsbury",
+      "to": "Pwllheli",
+      "lengthKm": 190.25,
+      "stations": 34
     }
   ]
 }
