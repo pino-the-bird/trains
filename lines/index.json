@@ -111,6 +111,14 @@
       "to": "Inverness",
       "lengthKm": 189.87,
       "stations": 10
+    },
+    {
+      "slug": "west-highland",
+      "name": "West Highland Line",
+      "from": "Glasgow Queen Street (High Level)",
+      "to": "Mallaig",
+      "lengthKm": 261.453,
+      "stations": 41
     }
   ]
 }
