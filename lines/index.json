@@ -103,6 +103,14 @@
       "to": "Pwllheli",
       "lengthKm": 190.25,
       "stations": 34
+    },
+    {
+      "slug": "highland-main",
+      "name": "Highland Main Line",
+      "from": "Perth",
+      "to": "Inverness",
+      "lengthKm": 189.87,
+      "stations": 10
     }
   ]
 }
