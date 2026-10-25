@@ -71,6 +71,14 @@
       "to": "Brunstane",
       "lengthKm": 50.612,
       "stations": 9
+    },
+    {
+      "slug": "tyne-valley",
+      "name": "Tyne Valley Line",
+      "from": "Carlisle",
+      "to": "Newcastle",
+      "lengthKm": 98.96,
+      "stations": 16
     }
   ]
 }
