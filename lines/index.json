@@ -87,6 +87,14 @@
       "to": "Barrow-in-Furness",
       "lengthKm": 137.73,
       "stations": 26
+    },
+    {
+      "slug": "kyle",
+      "name": "Kyle of Lochalsh Line",
+      "from": "Inverness",
+      "to": "Kyle of Lochalsh",
+      "lengthKm": 132.196,
+      "stations": 17
     }
   ]
 }
