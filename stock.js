@@ -4,8 +4,8 @@
 // leads, the inside lit after dark.
 
 import * as THREE from 'three'
-import { INK, PINK, CYAN, GOLD, inkLine, solid, flat, outlined, textCanvas, dispose } from './draw.js'
-import { CAR, GAP, KINDS } from './kinds.js'
+import { INK, PINK, CYAN, GOLD, ACID, inkLine, solid, flat, outlined, textCanvas, dispose } from './draw.js'
+import { CAR, GAP, KINDS, gapOf } from './kinds.js'
 
 export { CAR, GAP, KINDS, lengthOf } from './kinds.js'
 
@@ -132,8 +132,65 @@ function wagon(t) {
   return g
 }
 
+/** A section of a tram: low, square-ended, glass nearly all the way along, a pantograph on the middle one. */
+function tramSection(L, { cab = false, panto = false } = {}) {
+  return (t) => {
+    const g = new THREE.Group()
+    const body = outlined(new THREE.BoxGeometry(2.65, 2.7, L), 0xe8e4dc); body.position.y = 1.75; g.add(body)
+    for (const x of [-1.33, 1.33]) { const band = new THREE.Mesh(new THREE.PlaneGeometry(L - 1, 1.3), glassMat); band.position.set(x, 2.15, 0); band.rotation.y = x > 0 ? Math.PI / 2 : -Math.PI / 2; g.add(band) }
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.35, L), flat(PINK)); skirt.position.y = 0.55; g.add(skirt)
+    if (cab) for (const z of [-L / 2, L / 2]) { const sc = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.5), glassMat); sc.position.set(0, 2.25, z + Math.sign(z) * 0.02); sc.rotation.y = z > 0 ? 0 : Math.PI; g.add(sc); const bl = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.3), blindTex(t.dest)); bl.position.set(0, 3.2, z + Math.sign(z) * 0.03); bl.rotation.y = z > 0 ? 0 : Math.PI; g.add(bl) }
+    if (panto) { const arm = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 3.1, -1), new THREE.Vector3(0, 4.3, 0.2), new THREE.Vector3(0, 4.3, 0.2), new THREE.Vector3(-0.6, 4.45, 0.4), new THREE.Vector3(-0.6, 4.45, 0.4), new THREE.Vector3(0.6, 4.45, 0.4)]), inkLine); g.add(arm) }
+    for (const z of [-L / 2 + 2, L / 2 - 2]) g.add(bogie(z, t.wheels))
+    return g
+  }
+}
+/** The rack engine of a mountain line: small, tilted to the hill, a tall chimney; it pushes its coach up. */
+function rackEngine(t) {
+  const g = new THREE.Group()
+  const frame = outlined(new THREE.BoxGeometry(2.2, 0.5, 6), 0x1b1b1f); frame.position.y = 1; g.add(frame)
+  const boiler = outlined(new THREE.CylinderGeometry(0.75, 0.75, 4, 12).rotateX(Math.PI / 2 - 0.15), 0x1f3b2a); boiler.position.set(0, 2.2, 0.6); g.add(boiler)
+  const chimney = outlined(new THREE.CylinderGeometry(0.22, 0.3, 1.3, 10), 0x151517); chimney.position.set(0, 3.3, 2.3); g.add(chimney)
+  const cab = outlined(new THREE.BoxGeometry(2.3, 2.3, 1.8), 0x1f3b2a); cab.position.set(0, 2.4, -2); g.add(cab)
+  const band = new THREE.Mesh(new THREE.BoxGeometry(2.32, 0.14, 1.82), flat(GOLD)); band.position.set(0, 1.9, -2); g.add(band)
+  for (const z of [-1.6, 1.6]) g.add(bogie(z, t.wheels))
+  t.chimney = new THREE.Vector3(0, 4, 2.3)
+  t.steamer = g
+  return g
+}
+function rackCoach(t) {
+  const g = new THREE.Group()
+  const body = outlined(new THREE.BoxGeometry(2.4, 2.4, 6), 0x7a2a2a); body.position.y = 2; g.add(body)
+  for (const x of [-1.21, 1.21]) { const band = new THREE.Mesh(new THREE.PlaneGeometry(5, 0.9), glassMat); band.position.set(x, 2.4, 0); band.rotation.y = x > 0 ? Math.PI / 2 : -Math.PI / 2; g.add(band) }
+  const roof = outlined(new THREE.BoxGeometry(2.6, 0.15, 6.2), 0xe8e4dc); roof.position.y = 3.3; g.add(roof)
+  for (const z of [-2, 2]) g.add(bogie(z, t.wheels))
+  return g
+}
+/** The futuristic train (vividPebble71 and vividSock53 asked for one): a long nose, a single glass canopy, his colours. */
+function futureCar(lead) {
+  return (t) => {
+    const g = new THREE.Group()
+    const L = lead ? 27 : CAR
+    const sh = new THREE.Shape()
+    sh.moveTo(-L / 2, 0.6); sh.lineTo(L / 2 - (lead ? 9 : 0.4), 0.6)
+    if (lead) { sh.quadraticCurveTo(L / 2, 0.7, L / 2, 1.2); sh.quadraticCurveTo(L / 2 - 2, 2.6, L / 2 - 9, 3.4) } else { sh.lineTo(L / 2, 1.2); sh.lineTo(L / 2, 3.2) }
+    sh.lineTo(-L / 2 + 0.6, 3.4); sh.quadraticCurveTo(-L / 2, 3.4, -L / 2, 2.8); sh.lineTo(-L / 2, 0.6)
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: 2.9, bevelEnabled: false, curveSegments: 8 }); geo.translate(0, 0, -1.45); geo.rotateY(Math.PI / 2)
+    g.add(outlined(geo, 0xe8e4dc))
+    for (const x of [-1.46, 1.46]) { const band = new THREE.Mesh(new THREE.PlaneGeometry(L - (lead ? 10 : 2), 0.7), glassMat); band.position.set(x, 2.5, lead ? -4 : 0); band.rotation.y = x > 0 ? Math.PI / 2 : -Math.PI / 2; g.add(band) }
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.96, 0.25, L - 1), flat(ACID)); stripe.position.set(0, 1.5, lead ? -0.5 : 0); g.add(stripe)
+    const stripe2 = new THREE.Mesh(new THREE.BoxGeometry(2.96, 0.12, L - 1), flat(PINK)); stripe2.position.set(0, 1.25, lead ? -0.5 : 0); g.add(stripe2)
+    for (const z of [-L / 2 + 4, L / 2 - (lead ? 7 : 4)]) g.add(bogie(z, t.wheels))
+    if (lead) t.leadNose = true
+    return g
+  }
+}
+
 // what each kind is made of (the lengths are kinds.js's)
-const MAKE = { dmu: [car, car], express: [car, coach, coach, car], freight: [loco, wagon, wagon, wagon], steam: [steam, tender, coach, coach, coach] }
+// the ghost train: the unit's own shape, pale and see-through, lit green from inside
+const ghostMat = new THREE.MeshBasicMaterial({ color: 0x9dffc8, transparent: true, opacity: 0.32, depthWrite: false }); ghostMat.userData.shared = true
+const ghostLine = new THREE.LineBasicMaterial({ color: 0xc8ffe0, transparent: true, opacity: 0.8 }); ghostLine.userData.shared = true
+const MAKE = { ghost: [car, car], dmu: [car, car], express: [car, coach, coach, car], freight: [loco, wagon, wagon, wagon], steam: [steam, tender, coach, coach, coach], tram: [tramSection(11, { cab: true }), tramSection(9, { panto: true }), tramSection(11, { cab: true })], rack: [rackCoach, rackEngine], future: [futureCar(true), futureCar(false), (t) => { const g = futureCar(true)(t); g.rotation.y = Math.PI; const w = new THREE.Group(); w.add(g); return w }] }
 
 /**
  * A train you can see: its vehicles, placed on its line each frame by where the railway says it is. dest: what its
@@ -148,6 +205,7 @@ export class Train3D {
     this.lens = KINDS[this.kind].lens.slice()
     this.group = new THREE.Group()
     for (const c of this.cars) this.group.add(c)
+    if (this.kind === 'ghost') this.group.traverse((o) => { if (o.isMesh) o.material = ghostMat; else if (o.isLine) o.material = ghostLine })
     this.lamps = new THREE.Group()
     for (const x of [-0.8, 0.8]) { const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.16, 16), lampMat); lamp.position.set(x, 1.6, 0.05); this.lamps.add(lamp) }
     { const top = new THREE.Mesh(new THREE.CircleGeometry(0.14, 16), lampMat); top.position.set(0, 3.25, 0.05); this.lamps.add(top) }
@@ -158,13 +216,15 @@ export class Train3D {
   place(line, s, dir, side, travelled) {
     // (at the end of the line the train does not turn: its other end leads, and an engine at the back runs backwards)
     if (this.dir && dir !== this.dir) { this.cars.reverse(); this.lens.reverse(); for (const c of this.cars) c.userData.back = !c.userData.back }
+    // (a mountain line's engine is always below its coach: set off down the hill, it leads)
+    if (!this.dir && this.kind === 'rack' && dir < 0) { this.cars.reverse(); this.lens.reverse(); for (const c of this.cars) c.userData.back = !c.userData.back }
     this.dir = dir
     let back = 0
     const f = new THREE.Vector3(), b = new THREE.Vector3()
     this.cars.forEach((c, k) => {
       const L = this.lens[k]
       const mid = s - dir * (back + L / 2)
-      back += L + GAP
+      back += L + gapOf(this.kind)
       const h = Math.min(8, L / 2 - 0.5)
       line.pos(mid + dir * h, side, 0, f); line.pos(mid - dir * h, side, 0, b)
       c.position.copy(f).add(b).multiplyScalar(0.5)
