@@ -40,6 +40,63 @@
   #credits li { margin-bottom: 4px }
   #about { color: var(--dim); margin-top: 6px; font-size: 12px }
   #loading { position: fixed; inset: 0; display: grid; place-items: center; color: var(--dim) }
+  #title { position: fixed; inset: 0; z-index: 8; display: none; flex-direction: column; gap: 12px; padding: 18px; background: rgba(11, 11, 13, 0.92); overflow: auto; border: 0 }
+  #title .tl-head h1 { margin: 0; font-size: clamp(28px, 6vw, 64px); letter-spacing: 0.06em; text-transform: uppercase; color: var(--acid); text-shadow: 4px 4px 0 var(--pink); line-height: 1 }
+  #title .tl-head p { margin: 6px 0 0; color: var(--dim) }
+  #title .tl-body { display: flex; gap: 14px; flex: 1; min-height: 0 }
+  #title .tl-mapwrap { position: relative; flex: 1.3; min-height: 260px; border: 1.5px solid var(--ink) }
+  #title .tl-map { display: block; width: 100%; height: 100% }
+  #title .tl-hint { position: absolute; left: 8px; bottom: 6px; color: var(--dim); font-size: 12px }
+  #title .tl-side { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0 }
+  #title .tl-card { border: 1.5px solid var(--ink); padding: 10px }
+  #title .tl-card img { width: 100%; max-height: 220px; object-fit: cover; display: block; border: 1px solid var(--dim); image-rendering: pixelated }
+  #title .tl-card h2 { margin: 8px 0 4px; font-size: 17px; text-transform: uppercase; letter-spacing: 0.04em }
+  #title .tl-card p { margin: 0 0 4px }
+  #title .tl-credit, #title .tl-dim { color: var(--dim); font-size: 11px }
+  #title .tl-credit a { color: var(--dim) }
+  #title .tl-note { color: var(--acid) }
+  #title .tl-hours { display: flex; gap: 4px; flex-wrap: wrap }
+  #title .tl-go { font-size: 20px; padding: 10px; border: 2px solid var(--acid); color: var(--acid); text-transform: uppercase; letter-spacing: 0.1em }
+  #title .tl-go:hover { background: var(--acid); color: var(--ground) }
+  #title .tl-list { display: flex; flex-wrap: wrap; gap: 4px; max-height: 160px; overflow: auto }
+  #title .tl-list button { font-size: 12px }
+  #title button.on { border-color: var(--acid); color: var(--acid) }
+  @media (max-width: 760px) { #title .tl-body { flex-direction: column } #title .tl-mapwrap { flex: none; height: 46vh } }
+  /* a layout for phones (his to add, 29 Oct: two people said the page was cluttered on a phone, and he told
+     soggyBadger65 he would give it a proper once-over): a slim bar at the top, the controls in a sheet that slides up
+     from a button, the photograph only while the train stands at a station, big buttons for driving */
+  #menuBtn { display: none }
+  @media (max-width: 760px), (max-height: 520px) {
+    body.phone #where { top: 8px; left: 8px; right: 60px; max-width: none; padding: 6px 8px; font-size: 12px }
+    body.phone #where h1 { font-size: 12px; margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+    body.phone #where #about, body.phone #where #extra { display: none }
+    body.phone #where.more #extra { display: block }
+    body.phone #menuBtn { display: block; position: fixed; top: 8px; right: 8px; z-index: 7; width: 44px; height: 44px; font-size: 20px; background: var(--panel); border: 1.5px solid var(--ink) }
+    body.phone #controls { display: none; top: auto; left: 0; right: 0; bottom: 0; max-height: 62vh; overflow: auto; border-width: 1.5px 0 0; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)) }
+    body.phone.sheet #controls { display: flex }
+    body.phone #controls .group { justify-content: flex-start }
+    body.phone #controls button, body.phone #controls select { font-size: 15px; padding: 8px 10px; max-width: 100% }
+    body.phone #controls select { flex: 1 1 100% }
+    body.phone #strip { left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); height: 30px }
+    body.phone #photo { display: none !important }
+    body.phone.at-station #photo.has { display: block !important; left: 8px; right: auto; bottom: 46px; width: 44vw }
+    body.phone #pad { left: auto; right: 8px; bottom: 46px; flex-direction: column; gap: 8px }
+    body.phone #pad button { font-size: 18px; padding: 14px 18px; min-width: 96px }
+    body.phone #netmap { inset: 0; border: 0 }
+    body.phone.sheet #pad, body.phone.sheet #strip { display: none }
+  }
+  #card { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); z-index: 9; padding: 16px }
+  #card h2 { margin: 0 0 8px; font-size: 48px; color: var(--acid); text-shadow: 3px 3px 0 var(--pink) }
+  #card h2 span { font-size: 18px; color: var(--dim); text-shadow: none }
+  #card p { margin: 0 0 6px }
+  #card .row { display: flex; gap: 8px; margin-top: 10px }
+  #card button { font-size: 15px; padding: 8px 14px }
+  /* photo mode: nothing over the picture but the bar to take it */
+  body.photo .panel:not(#photobar), body.photo #menuBtn { display: none !important }
+  #photobar { left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; z-index: 9; padding: 8px }
+  #photobar[hidden] { display: none }
+  #photobar button { font-size: 15px; padding: 8px 12px }
+  #photobar .take { border-color: var(--acid); color: var(--acid) }
   #netmap { position: fixed; inset: 12px; display: none; z-index: 6; background: var(--ground); border: 1.5px solid var(--ink); padding: 0; touch-action: none }
   #netmap canvas { display: block; width: 100%; height: 100% }
   #netmap .maphead { position: absolute; top: 8px; left: 10px; right: 10px; display: flex; gap: 12px; align-items: center }
@@ -73,6 +130,10 @@
 <div id="pad" class="panel" hidden></div>
 <div id="strip" class="panel" hidden><svg id="stripSvg" preserveAspectRatio="none"></svg></div>
 <div id="netmap"></div>
+<div id="card" class="panel" hidden></div>
+<div id="photobar" class="panel" hidden><button class="take">take the picture</button><button class="link">copy a link to here</button><button class="back">back</button></div>
+<button id="menuBtn" aria-label="controls">☰</button>
+<div id="title" class="panel"></div>
 <div id="pino"><h2>my train simulator: real lines, run from the cafe computer</h2>
 <p>The wind howls through Blea Moor Tunnel as the train climbs past Ribblehead Viaduct, and the Dent photo’s steel skeleton seems to breathe under the clouds. <span class="ride">2026-10-29</span></p>
 <p>Added a live weather engine, now storms slam across the Settle‑Carlisle peaks while trains keep chugging, making the whole network feel like a chaotic, gorgeous mess. <span class="ride">2026-10-29</span></p>
