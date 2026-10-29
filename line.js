@@ -166,6 +166,22 @@ export class Line {
     })
     sl.instanceMatrix.needsUpdate = true
     g.add(sl)
+    // a mountain line's rack between the rails; a tram line's wire overhead on its poles
+    if (this.meta.kind === 'rack') g.add(this.ribbon(a, b, (s) => this.lateral(s, 1) - 0.12, (s) => this.lateral(s, 1) + 0.12, 0.3, ctx.mats.rail, anchor, 5))
+    if (this.meta.kind === 'tram') {
+      const wire = [], poles = []
+      for (const side of [1, -1]) {
+        let prev = null
+        for (let s = Math.ceil(a / 30) * 30; s <= b; s += 30) {
+          const c = this.pos(s, side, 5.8).sub(new THREE.Vector3(anchor[0], 0, anchor[1]))
+          if (prev) wire.push(prev, c)
+          prev = c
+          if (side > 0) { const base = this.pos(s, 0, 0), [tx, tz] = this.tangent(s), o = HALF * this.twoAt(s) + 3.2; poles.push(new THREE.Vector3(base.x + tz * o - anchor[0], base.y, base.z - tx * o - anchor[1]), new THREE.Vector3(base.x + tz * o - anchor[0], base.y + 6.4, base.z - tx * o - anchor[1]), new THREE.Vector3(base.x + tz * o - anchor[0], base.y + 6.1, base.z - tx * o - anchor[1]), c.clone().add(new THREE.Vector3(0, 0.3, 0))) }
+        }
+      }
+      g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(wire), ctx.mats.fence))
+      g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(poles), ctx.mats.fence))
+    }
     return g
   }
 
@@ -205,10 +221,18 @@ export class Line {
     const two = this.twoAt(s) > 0.5
     // a platform each side where there are two tracks; on one track, a side by turns
     const sides = two ? [1, -1] : [k % 2 ? -1 : 1]
+    // (a tram stop is a short low platform with a shelter, not a station)
+    const tram = this.meta.kind === 'tram'
     for (const sd of sides) {
       const edge = (two ? HALF : 0) + 1.5 + 2.6
-      const plat = outlined(new THREE.BoxGeometry(5.2, st.disused ? 0.5 : 1, st.disused ? 70 : 110), st.disused ? 0x232220 : 0x3a3833)
-      g.add(this.placeAlong(plat, s, sd * edge, st.disused ? 0.15 : 0.5))
+      const plat = outlined(new THREE.BoxGeometry(tram ? 3.2 : 5.2, st.disused ? 0.5 : tram ? 0.4 : 1, st.disused ? 70 : tram ? 34 : 110), st.disused ? 0x232220 : 0x3a3833)
+      g.add(this.placeAlong(plat, s, sd * (tram ? edge - 1 : edge), st.disused ? 0.15 : tram ? 0.2 : 0.5))
+      if (tram && !st.disused) {
+        const shelter = outlined(new THREE.BoxGeometry(1.6, 2.4, 5), 0x2fd1ff, { opacity: 0.45 }); g.add(this.placeAlong(shelter, s, sd * (edge - 0.4), 1.6))
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(4, 1), new THREE.MeshBasicMaterial({ map: textCanvas([st.name], { size: 80 }), side: THREE.DoubleSide }))
+        const post = new THREE.Group(); sign.position.y = 3; post.add(sign); g.add(this.placeAlong(post, s + 14, sd * (edge - 0.4), 0)); post.rotateY(Math.PI / 2)
+        continue
+      }
       const out = sd * (edge + 2.6)
       const sign = new THREE.Mesh(new THREE.PlaneGeometry(10, 2.5), new THREE.MeshBasicMaterial({ map: textCanvas([st.name, st.disused ? 'closed' : `${(s / 1609.34).toFixed(1)} miles from ${this.data.from}`], { accent: st.disused ? '#8d8a84' : '#a7cd07' }), side: THREE.DoubleSide }))
       const post = new THREE.Group(); sign.position.y = 4.4; post.add(sign)
@@ -341,7 +365,8 @@ export class Line {
       const r = Math.max(...pts.map((p) => Math.hypot(p[0] - cx, p[1] - cz)))
       near.add({ kind: 'lake', x: cx, z: cz, r, reach: 9000, needsGround: true, build: () => this.buildLake(pts, [cx, cz], ctx) })
     }
-    for (const sg of sc.signals || []) {
+    // (the map's own signals, until he adds signals you drive by, which put their own at every station and block)
+    for (const sg of ctx.ownSignals ? [] : sc.signals || []) {
       if (sg.s < 40 || sg.s > this.length - 40) continue
       const [x, z] = this.centre(sg.s)
       const signal = { s: sg.s, line: this, lamp: null }
@@ -388,7 +413,8 @@ export class Line {
       const crowns = new THREE.InstancedMesh(ctx.geos.crown, ctx.mats.crown, n)
       const trunks = new THREE.InstancedMesh(ctx.geos.trunk, ctx.mats.trunk, n)
       const rng = mulberry(Math.floor(anchor[0] * 7 + anchor[1]))
-      const c1 = new THREE.Color(0x173418), c2 = new THREE.Color(0x4a6a24)
+      // (in autumn, once he has added the seasons, the broadleaves turn)
+      const c1 = new THREE.Color(0x173418), c2 = ctx.autumn ? new THREE.Color(0xb8632a) : new THREE.Color(0x4a6a24)
       for (let k = 0; k < n; k++) {
         const x = c.trees[k * 2], z = c.trees[k * 2 + 1], sc = 0.7 + rng() * 0.8, broad = rng() < 0.4
         q.setFromAxisAngle(up, rng() * Math.PI * 2)
