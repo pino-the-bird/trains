@@ -25,8 +25,8 @@ const CATCH_UP = 90 * 60             // how far back it starts running when it o
 
 /** What the railway needs of a line: its length, its stops, how many tracks where, how fast. */
 export class SimLine {
-  constructor({ slug, name, from, to, length, stops, tracks = [], speed = 26.8, every = 60, freight = 0, steam = [], kind = 'dmu' }) {
-    Object.assign(this, { slug, name, from, to, length, speed, every, freight, steam, kind })
+  constructor({ slug, name, from, to, length, stops, tracks = [], speed = 26.8, every = 60, freight = 0, steam = [], kind = 'dmu', future = false, ghost = false }) {
+    Object.assign(this, { slug, name, from, to, length, speed, every, freight, steam, kind, future, ghost })
     const n = Math.ceil(length / 10) + 1
     this.two = new Float32Array(n)
     for (const [a0, b0, k] of tracks) {
@@ -128,7 +128,7 @@ export function planDay(line) {
   for (let t = 6 * 3600 + offA; t <= 22.5 * 3600; t += every) deps.push(planTrip(line, 0, last, t, line.kind))
   for (let t = 6 * 3600 + offB; t <= 22.5 * 3600; t += every) deps.push(planTrip(line, last, 0, t, line.kind))
   // every few trips is a longer train where the line is busy enough to have one
-  if (line.kind === 'dmu' && line.twoAt(line.length / 2) > 0.5) deps.forEach((d, k) => { if (k % 4 === 1) Object.assign(d, planTrip(line, d.from, d.to, d.dep, 'express')) })
+  if (line.kind === 'dmu' && line.twoAt(line.length / 2) > 0.5) deps.forEach((d, k) => { if (k % 4 === 1) Object.assign(d, planTrip(line, d.from, d.to, d.dep, line.future && k % 8 === 1 ? 'future' : 'express')) })
   deps.sort((a, b) => a.dep - b.dep)
   const units = []
   for (const trip of deps) {
@@ -152,6 +152,13 @@ export function planDay(line) {
     const u = new Unit(line, 'steam', units.length)
     const out = planTrip(line, a, b, sp.at * 3600, 'steam')
     u.trips.push(out, planTrip(line, b, a, out.arr + 90 * 60, 'steam'))
+    units.push(u)
+  }
+  // a ghost train after midnight, once he has added it: end to end, stopping nowhere, in nobody's way
+  if (line.ghost) {
+    const u = new Unit(line, 'ghost', units.length)
+    const up = rng() < 0.5
+    u.trips.push(planTrip(line, up ? 0 : last, up ? last : 0, 24 * 3600 + 5 * 60 + Math.floor(rng() * 50) * 60, 'ghost', 'ends'))
     units.push(u)
   }
   for (const u of units) { delete u.free; delete u.at }
@@ -188,7 +195,7 @@ export class Railway {
   }
 
   /** His train back and forth on its own line, from the first stop. */
-  shuttle(line, kind = 'dmu') {
+  shuttle(line, kind = line.kind || 'dmu') {
     const u = new Unit(line, kind, 0)
     u.shuttleKind = true
     const last = line.stops.length - 1
@@ -351,10 +358,11 @@ export class Railway {
   /** How far a unit may go: its stop, the back of the train in front (with room to spare), the loop before a held stretch. */
   authority(u, limit) {
     const line = u.line, d = u.dir
+    if (u.kind === 'ghost') return limit
     const closer = (x) => { if ((x - u.s) * d < (limit - u.s) * d) limit = x }
     for (const o of line.units) {
       // (one put away for the night is in the sidings, off the running line)
-      if (o === u || o.phase === 'stabled') continue
+      if (o === u || o.phase === 'stabled' || o.kind === 'ghost') continue
       const rear = o.s - o.dir * o.len
       // the train in front going the same way, on the same track (one at the other platform is not in the way)
       const sameTrack = line.twoAt(o.s) < 0.5 || Math.sign(o.side) === Math.sign(u.side) || Math.abs(o.side) < 0.5
@@ -375,6 +383,7 @@ export class Railway {
   }
   /** A stretch of one track taken as a train comes up to it (with room to stop), and let go once it is through. */
   claim(u) {
+    if (u.kind === 'ghost') return
     const d = u.dir, brake = (u.v * u.v) / (2 * BRAKE) + 400
     for (const sec of u.line.sections) {
       const entry = d > 0 ? sec.a : sec.b
