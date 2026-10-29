@@ -51,7 +51,8 @@ export class Ground {
       tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter
       this.atlas = { cv, g, tex, x0: 0, y0: 0, dirty: false, at: null }
     }
-    this.uniforms = { uAtlas: { value: this.atlas?.tex || null }, uRect: { value: new THREE.Vector3(0, 0, 1) }, uPhoto: { value: HAS.satellite ? 1 : 0 } }
+    // (uSnow: the height snow lies down to, out of reach until he adds the seasons)
+    this.uniforms = { uAtlas: { value: this.atlas?.tex || null }, uRect: { value: new THREE.Vector3(0, 0, 1) }, uPhoto: { value: HAS.satellite ? 1 : 0 }, uSnow: { value: 99999 } }
     this.mat = this.groundMat()
     this.photoOn = HAS.satellite
   }
@@ -63,12 +64,12 @@ export class Ground {
     m.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U)
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec2 merc;\nvarying vec2 vMerc;\nvarying float vH;\nvarying vec2 vW;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvMerc = merc; vH = position.y; vW = (modelMatrix * vec4(position, 1.0)).xz;')
+        .replace('#include <common>', '#include <common>\nattribute vec2 merc;\nvarying vec2 vMerc;\nvarying float vH;\nvarying vec2 vW;\nvarying float vUp;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvMerc = merc; vH = position.y; vW = (modelMatrix * vec4(position, 1.0)).xz; vUp = normalize(mat3(modelMatrix) * objectNormal).y;')
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', `#include <common>
-          varying vec2 vMerc; varying float vH; varying vec2 vW;
-          uniform sampler2D uAtlas; uniform vec3 uRect; uniform float uPhoto;
+          varying vec2 vMerc; varying float vH; varying vec2 vW; varying float vUp;
+          uniform sampler2D uAtlas; uniform vec3 uRect; uniform float uPhoto; uniform float uSnow;
           float gh(vec2 p) { p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
           float gn(vec2 p) { vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f); return mix(mix(gh(i), gh(i + vec2(1.0, 0.0)), u.x), mix(gh(i + vec2(0.0, 1.0)), gh(i + vec2(1.0, 1.0)), u.x), u.y); }`)
         .replace('#include <color_fragment>', `#include <color_fragment>
@@ -81,7 +82,10 @@ export class Ground {
           vec2 q = mod(vW, 2048.0);
           float grain = 0.6 * gn(q * 0.45) + 0.4 * gn(q * 1.7);
           float near = 1.0 - smoothstep(0.4, 2.5, length(fwidth(vW)));
-          diffuseColor.rgb *= mix(1.0, 0.8 + 0.4 * grain, near);`)
+          diffuseColor.rgb *= mix(1.0, 0.8 + 0.4 * grain, near);
+          // snow on the tops, ragged at its edge, thinner where it is steep
+          float snow = smoothstep(uSnow - 40.0, uSnow + 60.0, vH + (gn(q * 0.02) - 0.5) * 90.0) * (0.55 + 0.45 * vUp);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.98), clamp(snow, 0.0, 0.92));`)
         .replace('#include <dithering_fragment>', `#include <dithering_fragment>
           float w25 = fwidth(vH / 25.0) * 1.2, w100 = fwidth(vH / 100.0) * 1.2;
           float thin = 1.0 - smoothstep(0.0, w25 * 1.5, abs(fract(vH / 25.0 + 0.5) - 0.5));
