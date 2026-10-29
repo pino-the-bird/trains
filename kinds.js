@@ -7,5 +7,12 @@ export const KINDS = {
   express: { label: 'express', lens: [CAR, CAR, CAR, CAR], speed: 1.1 },
   freight: { label: 'freight', lens: [CAR - 3, CAR - 2, CAR - 2, CAR - 2], speed: 0.8 },
   steam: { label: 'steam', lens: [11, 7, CAR, CAR, CAR], speed: 0.85 },
+  // (29 Oct) a tram for a tram line, the rack engine and its coach for a mountain line, and the futuristic train
+  tram: { label: 'tram', lens: [11, 9, 11], speed: 1, gap: 0.4 },
+  rack: { label: 'rack engine', lens: [12, 6], speed: 1 },
+  future: { label: 'futuristic train', lens: [27, CAR, 27], speed: 1.3 },
+  // (cheerfulPebble11 and saltyMinnow76: a ghost train on the night line)
+  ghost: { label: 'ghost train', lens: [CAR, CAR], speed: 0.8 },
 }
-export const lengthOf = (kind) => { const k = KINDS[kind] || KINDS.dmu; return k.lens.reduce((a, b) => a + b, 0) + (k.lens.length - 1) * GAP }
+export const gapOf = (kind) => KINDS[kind]?.gap ?? GAP
+export const lengthOf = (kind) => { const k = KINDS[kind] || KINDS.dmu; return k.lens.reduce((a, b) => a + b, 0) + (k.lens.length - 1) * gapOf(kind) }
