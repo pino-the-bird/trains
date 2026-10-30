@@ -127,6 +127,14 @@
       "to": "Hastings",
       "lengthKm": 42.245,
       "stations": 9
+    },
+    {
+      "slug": "blackpool-trams",
+      "name": "Blackpool Tramway",
+      "from": "Starr Gate",
+      "to": "Fleetwood Ferry",
+      "lengthKm": 17.776,
+      "stations": 42
     }
   ]
 }
