@@ -119,6 +119,14 @@
       "to": "Mallaig",
       "lengthKm": 261.453,
       "stations": 41
+    },
+    {
+      "slug": "marshlink",
+      "name": "Marshlink Line",
+      "from": "Ashford International",
+      "to": "Hastings",
+      "lengthKm": 42.245,
+      "stations": 9
     }
   ]
 }
