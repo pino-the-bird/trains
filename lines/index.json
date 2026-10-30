@@ -143,6 +143,14 @@
       "to": "Llanberis (LLR)",
       "lengthKm": 7.447,
       "stations": 7
+    },
+    {
+      "slug": "furness",
+      "name": "Furness Line",
+      "from": "Lancaster",
+      "to": "Barrow-in-Furness",
+      "lengthKm": 55.675,
+      "stations": 11
     }
   ]
 }
