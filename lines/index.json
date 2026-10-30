@@ -135,6 +135,14 @@
       "to": "Fleetwood Ferry",
       "lengthKm": 17.776,
       "stations": 42
+    },
+    {
+      "slug": "snowdon",
+      "name": "Snowdon Mountain Railway",
+      "from": "Y Copa",
+      "to": "Llanberis (LLR)",
+      "lengthKm": 7.447,
+      "stations": 7
     }
   ]
 }
