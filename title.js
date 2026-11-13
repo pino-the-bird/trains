@@ -22,6 +22,7 @@ export class Title {
         <div class="tl-mapwrap"><canvas class="tl-map"></canvas><div class="tl-hint">Tap a line to pick it.</div></div>
         <div class="tl-side">
           <div class="tl-card"></div>
+          <div class="tl-dim">The hour to set off at. The trains run from six in the morning to half past ten at night, UK time: at night they are all put away, so pick an hour of the day.</div>
           <div class="tl-hours">${now ? '<button data-h="now">now</button>' : ''}${hours.map(([label, h]) => `<button data-h="${h}">${label}</button>`).join('')}</div>
           <button class="tl-go">depart</button>
           <div class="tl-list">${lines.map((l) => `<button data-slug="${esc(l.slug)}">${esc(l.name)}</button>`).join('')}</div>

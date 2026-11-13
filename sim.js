@@ -550,6 +550,8 @@ function driveWords() {
   if (drive.last) bits.push(drive.last)
   if (nx && ahead < 600 && follow.v > 0.1) bits.push(`${nx.name} in ${Math.round(ahead)} m`)
   if (drive.doors) bits.push('doors open, space to close and go')
+  // (the brakes the warning system put on stay on: the handle has to be brought back up)
+  else if (drive.notch === -1 && follow.v < 0.1) bits.push('stood with the brake full on: press up a few times for power')
   if (follow.v > follow.line.speed + 0.5) bits.push('over the line speed')
   if (drive.stops) bits.push(`${drive.stops} stops, ${drive.score} points`)
   const d = duty?.words(follow, rail.clock)
@@ -613,7 +615,7 @@ function showCard({ score, lines, title }) {
 function driveOn(on) {
   drive.on = on; drive.notch = 0; drive.doors = false
   duty?.reset()
-  drive.last = on ? 'arrows or W and S for power and brake, space for the doors' : null
+  drive.last = on ? 'up and down arrows (or W and S, Z and S on a French keyboard) for power and brake, a notch a press, space for the doors' : null
   follow.you = on
   if (on) { follow.phase = 'run'; setRate(1); cam = 'cab'; sideAt = null }
 }
@@ -621,8 +623,9 @@ addEventListener('keydown', (e) => {
   if (e.repeat || e.target?.tagName === 'SELECT') return
   if (HAS.sound && (e.key === 'h' || e.key === 'H')) horn(1.2)
   if (!drive.on) return
-  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { drive.notch = clamp(Math.round(drive.notch * 4 + 1) / 4, -1, 1); e.preventDefault() }
-  if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { drive.notch = clamp(Math.round(drive.notch * 4 - 1) / 4, -1, 1); e.preventDefault() }
+  // (by where the key is, not what it says: W on a QWERTY keyboard is Z on a French AZERTY one, the same place)
+  if (e.key === 'ArrowUp' || e.code === 'KeyW') { drive.notch = clamp(Math.round(drive.notch * 4 + 1) / 4, -1, 1); e.preventDefault() }
+  if (e.key === 'ArrowDown' || e.code === 'KeyS') { drive.notch = clamp(Math.round(drive.notch * 4 - 1) / 4, -1, 1); e.preventDefault() }
   if (e.key === ' ') { driveDoors(); e.preventDefault() }
   if ((e.key === 'a' || e.key === 'A') && duty) duty.acknowledge()
 })
@@ -925,7 +928,7 @@ function panels(dt) {
   const nx = L.stops[follow.next] || L.stops[L.stops.length - 1]
   const miles = Math.abs(nx.s - follow.s) / 1609.34
   const at = rail.stopIndexAt(follow)
-  $('next').textContent = follow.phase === 'stabled' ? `put away at ${L.stops[at]?.name || L.to} for the night` : follow.phase !== 'run' ? `at ${L.stops[at]?.name || ''}` : `next: ${nx.name}, ${miles < 0.1 ? 'arriving' : `${miles.toFixed(1)} mi`}`
+  $('next').textContent = follow.phase === 'stabled' ? `put away at ${L.stops[at]?.name || L.to} for the night: the trains run from six in the morning to half past ten at night, UK time, so pick morning in the hours to see them go` : follow.phase !== 'run' ? `at ${L.stops[at]?.name || ''}` : `next: ${nx.name}, ${miles < 0.1 ? 'arriving' : `${miles.toFixed(1)} mi`}`
   $('speed').textContent = Math.round(follow.v * 2.23694)
   const line = full.get(L.slug)
   $('height').textContent = line ? Math.round(line.trackY(follow.s) * 3.28084) : '--'
@@ -959,7 +962,7 @@ fillTrains()
 paintButtons()
 paintCredits()
 drawStrip()
-addEventListener('keydown', (e) => { if (e.target?.tagName === 'SELECT') return; const k = Number(e.key); if (k >= 1 && k <= CAMS.length) { cam = CAMS[k - 1][0]; sideAt = null; paintButtons() } })
+addEventListener('keydown', (e) => { if (e.target?.tagName === 'SELECT') return; const k = Number(e.code.replace(/^(Digit|Numpad)/, '')); if (k >= 1 && k <= CAMS.length) { cam = CAMS[k - 1][0]; sideAt = null; paintButtons() } })
 resize()
 $('loading').remove()
 const panelsOn = () => { for (const id of ['where', 'controls', 'strip']) $(id).hidden = false; drawStrip() }
