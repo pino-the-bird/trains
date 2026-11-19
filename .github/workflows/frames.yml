@@ -1,0 +1,32 @@
+# four views of his train simulator as it runs, filmed here when the town asks (frames.json, after he adds to it), so
+# that nothing is drawn on the town's server. the town puts this file here (world/Trains.js) and reads what it makes
+# (frames/) from the commit that made it. a push of its own does not start it again
+name: frames
+on:
+  push:
+    branches: [main]
+    paths: ['frames.json']
+  workflow_dispatch:
+concurrency:
+  group: frames
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  frames:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save --no-package-lock playwright@1.63.0
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: node .github/frames.mjs
+      - name: keep them
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frames
+          git diff --cached --quiet || { git commit -m "how it looks now"; git pull --rebase; git push; }
